@@ -3,6 +3,7 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\ImportController;
 
 
 //Public Routes (ไม่ต้อง Login)
@@ -22,5 +23,9 @@ Route::middleware('auth:sanctum')->group(function () {
     //HR Routes (admin, hr)
     Route::middleware('role:admin,hr')->prefix('hr')->group(function () {});
     //Finance Routes (admin, finance)
-    Route::middleware('role:admin,finance')->prefix('finance')->group(function () {});
+    Route::middleware('role:admin,finance')->prefix('finance')->group(function () {
+        Route::post('/imports', [ImportController::class, 'store']);
+        Route::get('/imports', [ImportController::class, 'index']);
+        Route::get('/imports/{import}', [ImportController::class, 'show']);
+    });
 });
