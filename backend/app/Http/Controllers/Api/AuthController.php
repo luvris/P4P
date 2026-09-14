@@ -26,11 +26,37 @@ class AuthController extends Controller
                 'message' => 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง'
             ], 401);
         }
-
         // 4. ส่งข้อมูล User กลับไป
+        // สร้าง Token (Sanctum)
+        $token = $user->createToken('auth_token')->plainTextToken;
+
         return response()->json([
             'message' => 'เข้าสู่ระบบสำเร็จ',
-            'user' => $user,
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'username' => $user->username,
+                'email' => $user->email,
+                'role' => $user->role,
+            ],
+            'token' => $token,
+        ], 200);
+    }
+
+    public function logout(Request $request)
+    {
+        // ลบ token ปัจจุบัน
+        $request->user()->currentAccessToken()->delete();
+
+        return response()->json([
+            'message' => 'ออกจากระบบสำเร็จ'
+        ], 200);
+    }
+
+    public function me(Request $request)
+    {
+        return response()->json([
+            'user' => $request->user()
         ], 200);
     }
 }
