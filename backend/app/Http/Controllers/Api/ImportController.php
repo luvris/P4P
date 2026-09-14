@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Import;
 use App\Models\Payroll;
 use App\Services\ImportService;
+use App\Services\Parsers\XlsxParser;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
@@ -33,17 +34,12 @@ class ImportController extends Controller
 
         // เก็บไฟล์
         $path = $file->store('imports', 'local');
-
-        //ใช้ Storage::disk() เพื่อให้ได้ path ที่ถูกต้อง
         $fullPath = Storage::disk('local')->path($path);
 
-        // ตรวจสอบว่าไฟล์มีจริง
-        if (!file_exists($fullPath)) {
-            return response()->json([
-                'message' => 'ไม่พบไฟล์หลังอัปโหลด',
-                'path' => $fullPath,
-            ], 500);
-        }
+        // อ่านข้อมูลก่อน import เพื่อส่ง preview
+        $parser = new XlsxParser();
+        $previewData = $parser->parse($fullPath);
+        $preview = array_slice($previewData, 0, 10);   // เอา 10 แถวแรก
 
         // ประมวลผล
         $import = $this->importService->process(
@@ -55,6 +51,12 @@ class ImportController extends Controller
         return response()->json([
             'message' => 'นำเข้าข้อมูลสำเร็จ',
             'import' => $import,
+            'preview' => $preview,
+            'uploader' => [
+                'id' => $request->user()->id,
+                'name' => $request->user()->name,
+                'role' => $request->user()->role,
+            ],
         ], 201);
     }
 
