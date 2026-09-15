@@ -4,15 +4,12 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreEmployeeRequest;
-use App\Models\Department;
 use App\Models\Duty;
 use App\Models\Employee;
 use App\Models\EmployeeStatus;
 use App\Models\EmployeeType;
-use App\Models\Group;
 use App\Models\Position;
 use App\Models\Prefix;
-use App\Models\Work;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -32,7 +29,6 @@ class EmployeeController extends Controller
             'duty:id,name',
             'group:id,name',
             'work:id,name',
-            'department:id,name',
             'status:id,name,color',
         ]);
 
@@ -91,7 +87,6 @@ class EmployeeController extends Controller
                 'duty:id,name',
                 'group:id,name',
                 'work:id,name',
-                'department:id,name',
                 'status:id,name,color',
             ]),
         ], 201);
@@ -99,13 +94,11 @@ class EmployeeController extends Controller
 
     /**
      * GET /api/hr/employees/stats
-     * ตัวเลขสำหรับ Stat Cards 5 ใบ
      */
     public function stats(): JsonResponse
     {
         $total = Employee::count();
 
-        // นับตามประเภทบุคลากร
         $byType = DB::table('employees')
             ->join('employee_types', 'employees.employee_type_id', '=', 'employee_types.id')
             ->select('employee_types.name', DB::raw('COUNT(*) as count'))
@@ -125,19 +118,53 @@ class EmployeeController extends Controller
 
     /**
      * GET /api/hr/lookups
-     * รวมทุก dropdown ในคำขอเดียว
+     * รวมทุก dropdown + hierarchy (duty → group → work)
      */
     public function lookups(): JsonResponse
     {
+        // ============================================
+        // 1. โหลด duties พร้อม nested groups + works
+        // ============================================
+        $duties = Duty::with([
+            'groups' => function ($q) {
+                $q->orderBy('name');
+            },
+            'groups.works' => function ($q) {
+                $q->orderBy('name');
+            },
+        ])
+            ->orderBy('name')
+            ->get()
+            ->map(function ($duty) {
+                return [
+                    'id'   => $duty->id,
+                    'name' => $duty->name,
+                    'groups' => $duty->groups->map(function ($group) {
+                        return [
+                            'id'      => $group->id,
+                            'name'    => $group->name,
+                            'duty_id' => $group->duty_id,
+                            'works'   => $group->works->map(function ($work) {
+                                return [
+                                    'id'       => $work->id,
+                                    'name'     => $work->name,
+                                    'group_id' => $work->group_id,
+                                ];
+                            })->values(),
+                        ];
+                    })->values(),
+                ];
+            });
+
+        // ============================================
+        // 2. Return lookups
+        // ============================================
         return response()->json([
             'prefixes'          => Prefix::orderBy('sort_order')->get(['id', 'name', 'short_name']),
             'employee_types'    => EmployeeType::orderBy('sort_order')->get(['id', 'name']),
             'positions'         => Position::orderBy('name')->get(['id', 'name']),
-            'duties'            => Duty::orderBy('name')->get(['id', 'name']),
-            'groups'            => Group::orderBy('name')->get(['id', 'name']),
-            'works'             => Work::orderBy('name')->get(['id', 'name']),
-            'departments'       => Department::orderBy('name')->get(['id', 'name']),
             'employee_statuses' => EmployeeStatus::orderBy('sort_order')->get(['id', 'name', 'color']),
+            'duties'            => $duties,
         ]);
     }
 }

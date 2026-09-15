@@ -22,7 +22,6 @@ class Employee extends Model
         'duty_id',
         'group_id',
         'work_id',
-        'department_id',
         'status_id',
         'bank_account',
         'note',
