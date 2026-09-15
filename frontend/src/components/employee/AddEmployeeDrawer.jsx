@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, memo } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react';
 import { X, Save, UserPlus } from 'lucide-react';
 
 /**
@@ -31,23 +31,17 @@ const Field = memo(({ label, name, required, error, children }) => (
             {required && <span className="text-red-500 ml-0.5">*</span>}
         </label>
         {children}
-        {error && (
-            <p className="mt-1 text-xs text-red-600">{error[0]}</p>
-        )}
+        {error && <p className="mt-1 text-xs text-red-600">{error[0]}</p>}
     </div>
 ));
 Field.displayName = 'Field';
 
-/**
- * AddEmployeeDrawer — Drawer สำหรับเพิ่มบุคลากร
- */
 const AddEmployeeDrawer = ({ open, onClose, lookups = {}, onSubmit }) => {
     const [form, setForm] = useState(INITIAL_FORM);
     const [errors, setErrors] = useState({});
     const [submitting, setSubmitting] = useState(false);
     const [globalError, setGlobalError] = useState('');
 
-    //เก็บ onClose ใน ref จะไม่ trigger useEffect ซ้ำ
     const onCloseRef = useRef(onClose);
     useEffect(() => {
         onCloseRef.current = onClose;
@@ -62,7 +56,7 @@ const AddEmployeeDrawer = ({ open, onClose, lookups = {}, onSubmit }) => {
         }
     }, [open]);
 
-    // ปิดด้วย ESC depend แค่ [open]
+    // ปิดด้วย ESC
     useEffect(() => {
         if (!open) return;
         const handler = (e) => {
@@ -72,9 +66,41 @@ const AddEmployeeDrawer = ({ open, onClose, lookups = {}, onSubmit }) => {
         return () => window.removeEventListener('keydown', handler);
     }, [open]);
 
-    // useCallback - setField
+    // ============================================
+    // Dependent dropdowns
+    // ============================================
+    const duties = lookups.duties || [];
+
+    const availableGroups = useMemo(() => {
+        if (!form.duty_id) return [];
+        const duty = duties.find((d) => String(d.id) === String(form.duty_id));
+        return duty?.groups || [];
+    }, [duties, form.duty_id]);
+
+    const availableWorks = useMemo(() => {
+        if (!form.group_id) return [];
+        const group = availableGroups.find((g) => String(g.id) === String(form.group_id));
+        return group?.works || [];
+    }, [availableGroups, form.group_id]);
+
+    // ============================================
+    // setField + reset ลูกเมื่อเปลี่ยน parent
+    // ============================================
     const setField = useCallback((key, value) => {
-        setForm((prev) => ({ ...prev, [key]: value }));
+        setForm((prev) => {
+            const next = { ...prev, [key]: value };
+
+            // Reset ลูก
+            if (key === 'duty_id') {
+                next.group_id = '';
+                next.work_id = '';
+            }
+            if (key === 'group_id') {
+                next.work_id = '';
+            }
+
+            return next;
+        });
         setErrors((prev) => ({ ...prev, [key]: undefined }));
         setGlobalError('');
     }, []);
@@ -88,6 +114,7 @@ const AddEmployeeDrawer = ({ open, onClose, lookups = {}, onSubmit }) => {
         const payload = {
             ...form,
             salary: form.salary === '' ? null : Number(form.salary),
+            position_id: form.position_id === '' ? null : form.position_id,
         };
 
         const result = await onSubmit?.(payload);
@@ -105,19 +132,17 @@ const AddEmployeeDrawer = ({ open, onClose, lookups = {}, onSubmit }) => {
     if (!open) return null;
 
     const inputCls = (name) =>
-        `w-full px-3 py-2 text-sm border rounded-lg bg-white transition-colors
+        `w-full px-3 py-2 text-sm border rounded-lg transition-colors
      focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent
-     ${errors[name] ? 'border-red-400 bg-red-50' : 'border-gray-300'}`;
+     ${errors[name] ? 'border-red-400 bg-red-50' : 'border-gray-300'}
+     ${name === 'group_id' && !form.duty_id ? 'bg-gray-50 text-gray-400 cursor-not-allowed' : ''}
+     ${name === 'work_id' && !form.group_id ? 'bg-gray-50 text-gray-400 cursor-not-allowed' : ''}
+     ${name !== 'group_id' && name !== 'work_id' ? 'bg-white' : ''}`;
 
     return (
         <>
-            {/* Backdrop */}
-            <div
-                className="fixed inset-0 bg-black/30 z-40"
-                onClick={onClose}
-            />
+            <div className="fixed inset-0 bg-black/30 z-40" onClick={onClose} />
 
-            {/* Drawer */}
             <aside className="fixed top-0 right-0 h-full w-full max-w-md bg-white shadow-2xl z-50 flex flex-col">
                 {/* Header */}
                 <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
@@ -234,7 +259,7 @@ const AddEmployeeDrawer = ({ open, onClose, lookups = {}, onSubmit }) => {
                     </Field>
 
                     {/* ตำแหน่ง */}
-                    <Field label="ตำแหน่ง" name="position_id" required error={errors.position_id}>
+                    <Field label="ตำแหน่ง" name="position_id" error={errors.position_id}>
                         <select
                             value={form.position_id}
                             onChange={(e) => setField('position_id', e.target.value)}
@@ -255,35 +280,41 @@ const AddEmployeeDrawer = ({ open, onClose, lookups = {}, onSubmit }) => {
                             className={inputCls('duty_id')}
                         >
                             <option value="">-- เลือกภารกิจ --</option>
-                            {lookups.duties?.map((d) => (
+                            {duties.map((d) => (
                                 <option key={d.id} value={d.id}>{d.name}</option>
                             ))}
                         </select>
                     </Field>
 
-                    {/* กลุ่มงาน */}
+                    {/* กลุ่มงาน — dependent */}
                     <Field label="กลุ่มงาน" name="group_id" required error={errors.group_id}>
                         <select
                             value={form.group_id}
                             onChange={(e) => setField('group_id', e.target.value)}
+                            disabled={!form.duty_id}
                             className={inputCls('group_id')}
                         >
-                            <option value="">-- เลือกกลุ่มงาน --</option>
-                            {lookups.groups?.map((g) => (
+                            <option value="">
+                                {!form.duty_id ? '-- เลือกภารกิจก่อน --' : '-- เลือกกลุ่มงาน --'}
+                            </option>
+                            {availableGroups.map((g) => (
                                 <option key={g.id} value={g.id}>{g.name}</option>
                             ))}
                         </select>
                     </Field>
 
-                    {/* งาน */}
+                    {/* งาน — dependent */}
                     <Field label="งาน" name="work_id" required error={errors.work_id}>
                         <select
                             value={form.work_id}
                             onChange={(e) => setField('work_id', e.target.value)}
+                            disabled={!form.group_id}
                             className={inputCls('work_id')}
                         >
-                            <option value="">-- เลือกงาน --</option>
-                            {lookups.works?.map((w) => (
+                            <option value="">
+                                {!form.group_id ? '-- เลือกกลุ่มงานก่อน --' : '-- เลือกงาน --'}
+                            </option>
+                            {availableWorks.map((w) => (
                                 <option key={w.id} value={w.id}>{w.name}</option>
                             ))}
                         </select>
