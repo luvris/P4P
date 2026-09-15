@@ -1,6 +1,5 @@
+import { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Inbox } from 'lucide-react';
-import { memo } from 'react';
-
 
 /**
  * Mapping สีของ status badge ตามค่า `color` จาก backend
@@ -24,7 +23,19 @@ const EmployeeTable = ({
     onPerPageChange,
 }) => {
     // ============================================
-    // สร้างเลขหน้าแบบย่อ (1 2 3 ... 52)
+    // State: Jump to page input
+    // ============================================
+    const [jumpPage, setJumpPage] = useState('');
+
+    // Sync ค่า input กับหน้าปัจจุบัน
+    useEffect(() => {
+        if (meta?.current_page) {
+            setJumpPage(String(meta.current_page));
+        }
+    }, [meta?.current_page]);
+
+    // ============================================
+    // สร้างเลขหน้าแบบย่อ (1 2 3 ... 34)
     // ============================================
     const buildPageNumbers = (current, last) => {
         if (!last || last <= 1) return [];
@@ -52,11 +63,30 @@ const EmployeeTable = ({
     const canPrev = meta && meta.current_page > 1;
     const canNext = meta && meta.current_page < meta.last_page;
 
+    // ============================================
+    // Handle Jump to Page
+    // ============================================
+    const handleJumpSubmit = (e) => {
+        e.preventDefault();
+
+        const page = parseInt(jumpPage, 10);
+
+        // Validate
+        if (isNaN(page) || page < 1 || page > meta.last_page) {
+            // Reset กลับหน้าปัจจุบัน
+            setJumpPage(String(meta.current_page));
+            return;
+        }
+
+        // ถ้าเป็นหน้าเดิม ก็ไม่ต้องเปลี่ยน
+        if (page === meta.current_page) return;
+
+        onPageChange(page);
+    };
+
     return (
         <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
-            {/* ============================================
-          ตาราง
-      ============================================ */}
+            {/* ตาราง */}
             <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                     <thead className="bg-gray-50 text-gray-600 border-b border-gray-200">
@@ -65,13 +95,12 @@ const EmployeeTable = ({
                             <th className="px-4 py-3 text-left font-medium">ชื่อ-นามสกุล</th>
                             <th className="px-4 py-3 text-left font-medium">ประเภท</th>
                             <th className="px-4 py-3 text-left font-medium">ตำแหน่ง</th>
-                            <th className="px-4 py-3 text-left font-medium">การกิจ</th>
+                            <th className="px-4 py-3 text-left font-medium">ภารกิจ</th>
                             <th className="px-4 py-3 text-left font-medium">สถานะ</th>
                         </tr>
                     </thead>
 
                     <tbody className="divide-y divide-gray-100">
-                        {/* Loading */}
                         {loading && (
                             <tr>
                                 <td colSpan={6} className="px-4 py-12 text-center text-gray-400">
@@ -81,7 +110,6 @@ const EmployeeTable = ({
                             </tr>
                         )}
 
-                        {/* Empty */}
                         {!loading && employees.length === 0 && (
                             <tr>
                                 <td colSpan={6} className="px-4 py-12 text-center text-gray-400">
@@ -91,7 +119,6 @@ const EmployeeTable = ({
                             </tr>
                         )}
 
-                        {/* Data */}
                         {!loading &&
                             employees.map((emp) => (
                                 <tr key={emp.id} className="hover:bg-amber-50/40 transition-colors">
@@ -127,10 +154,10 @@ const EmployeeTable = ({
             </div>
 
             {/* ============================================
-          Pagination
-      ============================================ */}
+                Pagination
+            ============================================ */}
             {meta && (
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-gray-200 text-sm text-gray-600">
+                <div className="flex flex-col lg:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-gray-200 text-sm text-gray-600">
                     {/* Left — summary + per_page */}
                     <div className="flex items-center gap-3">
                         <span className="text-xs">
@@ -155,7 +182,7 @@ const EmployeeTable = ({
                     </div>
 
                     {/* Right — page navigation */}
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-2 flex-wrap justify-center">
                         {/* Prev */}
                         <button
                             type="button"
@@ -199,6 +226,37 @@ const EmployeeTable = ({
                         >
                             <ChevronRight className="w-4 h-4" />
                         </button>
+
+                        {/*Jump to page */}
+                        <form onSubmit={handleJumpSubmit} className="flex items-center gap-1 ml-2 pl-2 border-l border-gray-200">
+                            <span className="text-xs text-gray-500 whitespace-nowrap">
+                                ไปหน้า
+                            </span>
+                            <input
+                                type="number"
+                                min="1"
+                                max={meta.last_page}
+                                value={jumpPage}
+                                onChange={(e) => setJumpPage(e.target.value)}
+                                onBlur={(e) => {
+                                    // ถ้าออก input แล้วค่าว่าง/ผิด → reset
+                                    const page = parseInt(e.target.value, 10);
+                                    if (isNaN(page) || page < 1 || page > meta.last_page) {
+                                        setJumpPage(String(meta.current_page));
+                                    }
+                                }}
+                                className="w-14 px-2 py-1 text-xs text-center border border-gray-300 rounded
+                                           focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-transparent
+                                           [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                aria-label="ไปหน้าที่"
+                            />
+                            <button
+                                type="submit"
+                                className="px-2 py-1 text-xs font-medium text-amber-700 bg-amber-100 hover:bg-amber-200 rounded"
+                            >
+                                ไป
+                            </button>
+                        </form>
                     </div>
                 </div>
             )}
@@ -206,4 +264,4 @@ const EmployeeTable = ({
     );
 };
 
-export default memo(EmployeeTable);
+export default EmployeeTable;
