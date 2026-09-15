@@ -32,28 +32,33 @@ class Payroll extends Model
     ];
 
     protected $casts = [
-        'salary' => 'decimal:2',
+        'salary'           => 'decimal:2',
         'living_allowance' => 'decimal:2',
-        'total_income' => 'decimal:2',
-        'social_security' => 'decimal:2',
-        'electricity' => 'decimal:2',
-        'water' => 'decimal:2',
+        'total_income'     => 'decimal:2',
+        'social_security'  => 'decimal:2',
+        'electricity'      => 'decimal:2',
+        'water'            => 'decimal:2',
         'health_insurance' => 'decimal:2',
-        'cooperative' => 'decimal:2',
-        'life_insurance' => 'decimal:2',
-        'provident_fund' => 'decimal:2',
-        'student_loan' => 'decimal:2',
-        'total_deduction' => 'decimal:2',
-        'net_income' => 'decimal:2',
+        'cooperative'      => 'decimal:2',
+        'life_insurance'   => 'decimal:2',
+        'provident_fund'   => 'decimal:2',
+        'student_loan'     => 'decimal:2',
+        'total_deduction'  => 'decimal:2',
+        'net_income'       => 'decimal:2',
     ];
+
+    // ========== Relationships ==========
 
     public function import()
     {
         return $this->belongsTo(Import::class);
     }
 
-    public function getFullNameAttribute(): string
+    /**
+     *เชื่อมกับ Employee ผ่าน citizen_id
+     */
+    public function employee()
     {
-        return trim("{$this->first_name} {$this->last_name}");
+        return $this->belongsTo(Employee::class, 'citizen_id', 'citizen_id');
     }
 }
