@@ -1,7 +1,9 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import LoginPage from './pages/LoginPage';
 import ImportPage from './pages/ImportPage';
+import EmployeePage from './pages/Employee';
 import ProtectedRoute from './components/ProtectedRoute';
+import DashboardLayout from './components/layout/DashboardLayout';
 
 function App() {
   return (
@@ -10,14 +12,28 @@ function App() {
         {/* Public */}
         <Route path="/" element={<LoginPage />} />
 
-        {/* Protected - ต้อง Login + Role ต้องเป็น admin หรือ finance */}
-        <Route 
-          path="/finance/import" 
+        {/* HR — บริหารงานบุคคล */}
+        <Route
+          path="/hr"
+          element={
+            <ProtectedRoute allowedRoles={['admin', 'hr']}>
+              <DashboardLayout title="บริหารงานบุคคล">
+                <EmployeePage />
+              </DashboardLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Finance — นำเข้าข้อมูลการเงิน */}
+        <Route
+          path="/finance/import"
           element={
             <ProtectedRoute allowedRoles={['admin', 'finance']}>
-              <ImportPage />
+              <DashboardLayout title="นำเข้าข้อมูลการเงิน">
+                <ImportPage />
+              </DashboardLayout>
             </ProtectedRoute>
-          } 
+          }
         />
 
         {/* Fallback */}

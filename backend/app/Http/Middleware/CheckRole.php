@@ -12,13 +12,13 @@ class CheckRole
     {
         if (!$request->user()) {
             return response()->json([
-                'message' => 'กรุณาเข้าสู่ระบบก่อน'
+                'message' => 'กรุณาเข้าสู่ระบบก่อน',
             ], 401);
         }
 
-        if (!in_array($request->user()->role, $roles)) {
+        if (!in_array($request->user()->role, $roles, true)) {
             return response()->json([
-                'message' => 'คุณไม่มีสิทธิ์เข้าถึงส่วนนี้'
+                'message' => 'คุณไม่มีสิทธิ์เข้าถึงส่วนนี้',
             ], 403);
         }
 

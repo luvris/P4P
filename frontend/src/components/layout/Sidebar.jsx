@@ -1,5 +1,5 @@
-import React from 'react';
-import { LayoutDashboard, Users, Wallet, FileSpreadsheet } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { LayoutDashboard, Users, Wallet, FileSpreadsheet, ChevronDown, ChevronRight } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import useAuth from '../../hooks/useAuth';
 import logo from '../../assets/logo-m.png';
@@ -8,29 +8,51 @@ const Sidebar = () => {
     const location = useLocation();
     const { user, hasRole } = useAuth();
 
+    // State สำหรับเปิด/ปิด submenu ที่มี children
+    const [openMenus, setOpenMenus] = useState({});
+
     const menuItems = [
         {
             name: 'Dashboard',
             icon: LayoutDashboard,
             path: '/dashboard',
-            roles: ['admin', 'hr', 'finance']
+            roles: ['admin', 'hr', 'finance'],
         },
         {
             name: 'บริหารงานบุคคล',
             icon: Users,
             path: '/hr',
-            roles: ['admin', 'hr']
+            roles: ['admin', 'hr'],
         },
         {
             name: 'งานการเงิน',
             icon: Wallet,
-            path: '/finance',
+            path: '/finance/import',   // ← parent ชี้ไปที่ลูกแรก
             roles: ['admin', 'finance'],
             children: [
                 { name: 'นำเข้าข้อมูลการเงิน', path: '/finance/import' }
-            ]
+            ],
         },
     ];
+
+    // Auto-open submenu เมื่อ path ตรงกับ children
+    useEffect(() => {
+        menuItems.forEach((item) => {
+            if (item.children) {
+                const hasActiveChild = item.children.some(
+                    (child) => location.pathname === child.path
+                );
+                if (hasActiveChild) {
+                    setOpenMenus((prev) => ({ ...prev, [item.path]: true }));
+                }
+            }
+        });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [location.pathname]);
+
+    const toggleMenu = (path) => {
+        setOpenMenus((prev) => ({ ...prev, [path]: !prev[path] }));
+    };
 
     return (
         <aside className="w-64 bg-white border-r border-gray-200 min-h-screen flex flex-col">
@@ -57,32 +79,69 @@ const Sidebar = () => {
                 {menuItems.map((item) => {
                     if (!hasRole(...item.roles)) return null;
 
-                    const isActive = location.pathname.startsWith(item.path);
                     const Icon = item.icon;
+                    const isActive = location.pathname.startsWith(item.path);
+                    const hasChildren = item.children && item.children.length > 0;
+                    const isOpen = openMenus[item.path];
+
+                    // ✅ ถ้ามี children → คลิก parent = toggle submenu + navigate
+                    const handleParentClick = (e) => {
+                        if (hasChildren) {
+                            // ถ้า submenu ปิดอยู่ → เปิด
+                            if (!isOpen) {
+                                toggleMenu(item.path);
+                            }
+                            // ปล่อยให้ Link ทำงานปกติ → navigate ไปที่ item.path (ลูกแรก)
+                        }
+                    };
 
                     return (
                         <div key={item.path}>
+                            {/* Parent */}
                             <Link
                                 to={item.path}
-                                className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${isActive
-                                    ? 'bg-[#F5EEDC] text-[#8B5E3C]'
-                                    : 'text-gray-600 hover:bg-gray-50'
+                                onClick={handleParentClick}
+                                className={`flex items-center justify-between gap-3 px-4 py-3 rounded-lg transition-colors ${isActive
+                                        ? 'bg-[#F5EEDC] text-[#8B5E3C]'
+                                        : 'text-gray-600 hover:bg-gray-50'
                                     }`}
                             >
-                                <Icon size={20} />
-                                <span className="text-sm font-medium">{item.name}</span>
+                                <div className="flex items-center gap-3">
+                                    <Icon size={20} />
+                                    <span className="text-sm font-medium">{item.name}</span>
+                                </div>
+
+                                {/* Chevron สำหรับ submenu */}
+                                {hasChildren && (
+                                    <button
+                                        type="button"
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            toggleMenu(item.path);
+                                        }}
+                                        className="p-1 hover:bg-black/5 rounded"
+                                        aria-label="toggle submenu"
+                                    >
+                                        {isOpen ? (
+                                            <ChevronDown size={14} />
+                                        ) : (
+                                            <ChevronRight size={14} />
+                                        )}
+                                    </button>
+                                )}
                             </Link>
 
                             {/* Submenu */}
-                            {item.children && isActive && (
+                            {hasChildren && isOpen && (
                                 <div className="ml-4 mt-1 space-y-1">
                                     {item.children.map((child) => (
                                         <Link
                                             key={child.path}
                                             to={child.path}
                                             className={`block px-4 py-2 rounded-lg text-sm transition-colors ${location.pathname === child.path
-                                                ? 'bg-[#F5EEDC] text-[#8B5E3C] font-medium'
-                                                : 'text-gray-500 hover:bg-gray-50'
+                                                    ? 'bg-[#F5EEDC] text-[#8B5E3C] font-medium'
+                                                    : 'text-gray-500 hover:bg-gray-50'
                                                 }`}
                                         >
                                             {child.name}

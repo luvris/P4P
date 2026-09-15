@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import toast from 'react-hot-toast';
-import DashboardLayout from '../components/layout/DashboardLayout';
 import FileDropZone from '../components/features/import/FileDropZone';
 import ImportSummary from '../components/features/import/ImportSummary';
 import SelectedFilePanel from '../components/features/import/SelectedFilePanel';
@@ -14,7 +13,6 @@ const ImportPage = () => {
     const [previewData, setPreviewData] = useState([]);
 
     const handleFileSelect = (file) => {
-        // ตรวจสอบนามสกุล
         const validExtensions = ['xlsx', 'xls', 'txt'];
         const extension = file.name.split('.').pop().toLowerCase();
 
@@ -23,7 +21,6 @@ const ImportPage = () => {
             return;
         }
 
-        // ตรวจสอบขนาด (10 MB)
         if (file.size > 10 * 1024 * 1024) {
             toast.error('ขนาดไฟล์ต้องไม่เกิน 10 MB');
             return;
@@ -60,51 +57,48 @@ const ImportPage = () => {
     };
 
     return (
-        <DashboardLayout title="นำเข้าข้อมูลการเงิน">
-            <div className="max-w-7xl mx-auto">
-                {/* Header */}
-                <div className="mb-6">
-                    <h2 className="text-2xl font-bold text-[#8B5E3C] mb-1">
-                        นำเข้าข้อมูลการเงิน
-                    </h2>
-                    <p className="text-gray-500 text-sm">
-                        รองรับไฟล์ Excel (.xlsx) และ Text (.txt)
-                    </p>
+        <div className="max-w-7xl mx-auto">
+            {/* Header ของหน้า (optional — Header หลักมีอยู่แล้ว) */}
+            <div className="mb-6">
+                <h2 className="text-2xl font-bold text-[#8B5E3C] mb-1">
+                    นำเข้าข้อมูลการเงิน
+                </h2>
+                <p className="text-gray-500 text-sm">
+                    รองรับไฟล์ Excel (.xlsx) และ Text (.txt)
+                </p>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Left: Drop Zone + Preview Table */}
+                <div className="lg:col-span-2 space-y-6">
+                    <FileDropZone
+                        onFileSelect={handleFileSelect}
+                        selectedFile={selectedFile}
+                        onClear={handleClear}
+                    />
+
+                    {previewData.length > 0 && (
+                        <PreviewTable data={previewData} />
+                    )}
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    {/* Left: Drop Zone + Preview Table */}
-                    <div className="lg:col-span-2 space-y-6">
-                        <FileDropZone
-                            onFileSelect={handleFileSelect}
-                            selectedFile={selectedFile}
-                            onClear={handleClear}
+                {/* Right: Summary + Selected File */}
+                <div className="space-y-6">
+                    {selectedFile && !summary && (
+                        <SelectedFilePanel
+                            file={selectedFile}
+                            onImport={handleImport}
+                            onCancel={handleClear}
+                            loading={loading}
                         />
+                    )}
 
-                        {/* Preview Table */}
-                        {previewData.length > 0 && (
-                            <PreviewTable data={previewData} />
-                        )}
-                    </div>
-
-                    {/* Right: Summary + Selected File */}
-                    <div className="space-y-6">
-                        {selectedFile && !summary && (
-                            <SelectedFilePanel
-                                file={selectedFile}
-                                onImport={handleImport}
-                                onCancel={handleClear}
-                                loading={loading}
-                            />
-                        )}
-
-                        {summary && (
-                            <ImportSummary summary={summary} />
-                        )}
-                    </div>
+                    {summary && (
+                        <ImportSummary summary={summary} />
+                    )}
                 </div>
             </div>
-        </DashboardLayout>
+        </div>
     );
 };
 
