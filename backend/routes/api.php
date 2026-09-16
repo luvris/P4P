@@ -39,9 +39,10 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // Employee Management
         Route::prefix('employees')->group(function () {
-            Route::get('/',      [EmployeeController::class, 'index']);
-            Route::post('/',     [EmployeeController::class, 'store']);
-            Route::get('/stats', [EmployeeController::class, 'stats']);
+            Route::get('/',               [EmployeeController::class, 'index']);
+            Route::post('/',              [EmployeeController::class, 'store']);
+            Route::get('/stats',          [EmployeeController::class, 'stats']);
+            Route::put('/{employee}',     [EmployeeController::class, 'update']);
         });
 
         // Lookups (dropdown ทั้งหมดในคำขอเดียว)

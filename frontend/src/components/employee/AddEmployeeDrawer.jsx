@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react';
-import { X, Save, UserPlus } from 'lucide-react';
+import { X, Save, UserPlus, Pencil } from 'lucide-react';
 
 /**
  * Initial form state
@@ -22,9 +22,29 @@ const INITIAL_FORM = {
 };
 
 /**
+ * แปลงข้อมูลพนักงานจาก backend → form state
+ */
+const buildFormFromEmployee = (emp) => ({
+    prefix_id: emp?.prefix_id != null ? String(emp.prefix_id) : '',
+    first_name: emp?.first_name ?? '',
+    last_name: emp?.last_name ?? '',
+    citizen_id: emp?.citizen_id ?? '',
+    position_number: emp?.position_number ?? '',
+    salary: emp?.salary != null && emp?.salary !== '' ? String(emp.salary) : '',
+    employee_type_id: emp?.employee_type_id != null ? String(emp.employee_type_id) : '',
+    position_id: emp?.position_id != null ? String(emp.position_id) : '',
+    duty_id: emp?.duty_id != null ? String(emp.duty_id) : '',
+    group_id: emp?.group_id != null ? String(emp.group_id) : '',
+    work_id: emp?.work_id != null ? String(emp.work_id) : '',
+    status_id: emp?.status_id != null ? String(emp.status_id) : '',
+    bank_account: emp?.bank_account ?? '',
+    note: emp?.note ?? '',
+});
+
+/**
  * Field — ย้ายออกนอก component หลัก
  */
-const Field = memo(({ label, name, required, error, children }) => (
+const Field = memo(({ label, required, error, children }) => (
     <div>
         <label className="block text-xs font-medium text-gray-700 mb-1">
             {label}
@@ -36,7 +56,9 @@ const Field = memo(({ label, name, required, error, children }) => (
 ));
 Field.displayName = 'Field';
 
-const AddEmployeeDrawer = ({ open, onClose, lookups = {}, onSubmit }) => {
+const AddEmployeeDrawer = ({ open, onClose, lookups = {}, onSubmit, employee = null }) => {
+    const isEditing = Boolean(employee);
+
     const [form, setForm] = useState(INITIAL_FORM);
     const [errors, setErrors] = useState({});
     const [submitting, setSubmitting] = useState(false);
@@ -47,14 +69,14 @@ const AddEmployeeDrawer = ({ open, onClose, lookups = {}, onSubmit }) => {
         onCloseRef.current = onClose;
     }, [onClose]);
 
-    // Reset form เมื่อเปิด drawer ใหม่
+    // Reset form เมื่อเปิด drawer ใหม่ (เพิ่ม = ค่าว่าง, แก้ไข = ข้อมูลเดิม)
     useEffect(() => {
         if (open) {
-            setForm(INITIAL_FORM);
+            setForm(employee ? buildFormFromEmployee(employee) : INITIAL_FORM);
             setErrors({});
             setGlobalError('');
         }
-    }, [open]);
+    }, [open, employee]);
 
     // ปิดด้วย ESC
     useEffect(() => {
@@ -147,8 +169,14 @@ const AddEmployeeDrawer = ({ open, onClose, lookups = {}, onSubmit }) => {
                 {/* Header */}
                 <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
                     <div className="flex items-center gap-2">
-                        <UserPlus className="w-5 h-5 text-amber-600" />
-                        <h2 className="text-base font-semibold text-gray-800">เพิ่มบุคลากร</h2>
+                        {isEditing ? (
+                            <Pencil className="w-5 h-5 text-amber-600" />
+                        ) : (
+                            <UserPlus className="w-5 h-5 text-amber-600" />
+                        )}
+                        <h2 className="text-base font-semibold text-gray-800">
+                            {isEditing ? 'แก้ไขบุคลากร' : 'เพิ่มบุคลากร'}
+                        </h2>
                     </div>
                     <button
                         type="button"

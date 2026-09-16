@@ -21,6 +21,7 @@ const EmployeeTable = ({
     loading = false,
     onPageChange,
     onPerPageChange,
+    onEdit,
 }) => {
     // ============================================
     // State: Jump to page input
@@ -124,7 +125,17 @@ const EmployeeTable = ({
                                 <tr key={emp.id} className="hover:bg-amber-50/40 transition-colors">
                                     <td className="px-4 py-3 text-gray-500">{emp.id}</td>
                                     <td className="px-4 py-3 font-medium text-gray-800">
-                                        {emp.full_name || `${emp.first_name} ${emp.last_name}`}
+                                        {onEdit ? (
+                                            <button
+                                                type="button"
+                                                onClick={() => onEdit(emp)}
+                                                className="text-left text-amber-700 hover:text-amber-900 hover:underline"
+                                            >
+                                                {emp.full_name || `${emp.first_name} ${emp.last_name}`}
+                                            </button>
+                                        ) : (
+                                            emp.full_name || `${emp.first_name} ${emp.last_name}`
+                                        )}
                                     </td>
                                     <td className="px-4 py-3 text-gray-600">
                                         {emp.employee_type?.name || '-'}

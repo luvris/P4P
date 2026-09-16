@@ -12,6 +12,7 @@ import AddEmployeeDrawer from '../../components/employee/AddEmployeeDrawer';
 
 const EmployeePage = () => {
     const [drawerOpen, setDrawerOpen] = useState(false);
+    const [editingEmployee, setEditingEmployee] = useState(null);
 
     const [searchInput, setSearchInput] = useState('');
     const debouncedSearch = useDebounce(searchInput, 500);
@@ -21,6 +22,7 @@ const EmployeePage = () => {
         stats, statsLoading,
         filters, updateFilters, setSearchFilter,
         createEmployee,
+        updateEmployee,
     } = useEmployees();
 
     const { lookups } = useLookups();
@@ -45,8 +47,20 @@ const EmployeePage = () => {
         updateFilters({ per_page: perPage, page: 1 }, false);
     }, [updateFilters]);
 
-    const handleAddClick = useCallback(() => setDrawerOpen(true), []);
-    const handleDrawerClose = useCallback(() => setDrawerOpen(false), []);
+    const handleAddClick = useCallback(() => {
+        setEditingEmployee(null);
+        setDrawerOpen(true);
+    }, []);
+
+    const handleEditClick = useCallback((emp) => {
+        setEditingEmployee(emp);
+        setDrawerOpen(true);
+    }, []);
+
+    const handleDrawerClose = useCallback(() => {
+        setDrawerOpen(false);
+        setEditingEmployee(null);
+    }, []);
 
     const handleCreateEmployee = useCallback(async (payload) => {
         const result = await createEmployee(payload);
@@ -57,6 +71,17 @@ const EmployeePage = () => {
         }
         return result;
     }, [createEmployee]);
+
+    const handleUpdateEmployee = useCallback(async (payload) => {
+        if (!editingEmployee) return { success: false, error: 'ไม่พบข้อมูลบุคลากรที่จะแก้ไข' };
+        const result = await updateEmployee(editingEmployee.id, payload);
+        if (result.success) {
+            toast.success('บันทึกข้อมูลสำเร็จ');
+        } else {
+            toast.error(result.error || 'ไม่สามารถบันทึกข้อมูลได้');
+        }
+        return result;
+    }, [editingEmployee, updateEmployee]);
 
     const filterBarFilters = useMemo(
         () => ({ ...filters, search: searchInput }),
@@ -86,13 +111,15 @@ const EmployeePage = () => {
                 loading={loading}
                 onPageChange={handlePageChange}
                 onPerPageChange={handlePerPageChange}
+                onEdit={handleEditClick}
             />
 
             <AddEmployeeDrawer
                 open={drawerOpen}
                 onClose={handleDrawerClose}
                 lookups={lookups}
-                onSubmit={handleCreateEmployee}
+                onSubmit={editingEmployee ? handleUpdateEmployee : handleCreateEmployee}
+                employee={editingEmployee}
             />
         </div>
     );

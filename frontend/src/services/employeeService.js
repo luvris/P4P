@@ -20,6 +20,16 @@ export const employeeService = {
     },
 
     /**
+     * แก้ไขข้อมูลบุคลากร
+     * @param {number|string} id - รหัสบุคลากร
+     * @param {Object} data - ข้อมูลบุคลากร
+     */
+    updateEmployee: async (id, data) => {
+        const response = await api.put(`/hr/employees/${id}`, data);
+        return response.data;
+    },
+
+    /**
      * ดึงสถิติสำหรับ Stat Cards
      */
     getStats: async () => {

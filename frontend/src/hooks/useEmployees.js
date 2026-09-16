@@ -99,6 +99,28 @@ const useEmployees = (initialFilters = {}) => {
         }
     }, [fetchEmployees, fetchStats]);
 
+    const updateEmployee = useCallback(async (id, payload) => {
+        try {
+            const response = await api.put(`/hr/employees/${id}`, payload);
+            await Promise.all([fetchEmployees(), fetchStats()]);
+            return { success: true, data: response.data.data };
+        } catch (err) {
+            let message = 'ไม่สามารถบันทึกข้อมูลได้';
+            let errors = {};
+            if (err.response?.status === 422) {
+                message = err.response.data?.message || 'ข้อมูลไม่ถูกต้อง';
+                errors = err.response.data?.errors || {};
+            } else if (err.response) {
+                message = err.response.data?.message || `เกิดข้อผิดพลาด (${err.response.status})`;
+            } else if (err.request) {
+                message = 'ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้';
+            } else {
+                message = err.message || 'เกิดข้อผิดพลาดที่ไม่คาดคิด';
+            }
+            return { success: false, error: message, errors };
+        }
+    }, [fetchEmployees, fetchStats]);
+
     const updateFilters = useCallback((newFilters, resetPage = true) => {
         setFilters((prev) => ({
             ...prev,
@@ -139,6 +161,7 @@ const useEmployees = (initialFilters = {}) => {
         refetch: fetchEmployees,
         refetchStats: fetchStats,
         createEmployee,
+        updateEmployee,
     };
 };
 

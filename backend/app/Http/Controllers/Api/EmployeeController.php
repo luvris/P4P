@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreEmployeeRequest;
+use App\Http\Requests\UpdateEmployeeRequest;
 use App\Models\Duty;
 use App\Models\Employee;
 use App\Models\EmployeeStatus;
@@ -90,6 +91,34 @@ class EmployeeController extends Controller
                 'status:id,name,color',
             ]),
         ], 201);
+    }
+
+    /**
+     * PUT /api/hr/employees/{employee}
+     * แก้ไขข้อมูลบุคลากร
+     */
+    public function update(UpdateEmployeeRequest $request, Employee $employee): JsonResponse
+    {
+        $employee = DB::transaction(function () use ($request, $employee) {
+            $employee->update([
+                ...$request->validated(),
+                'updated_by' => $request->user()?->id,
+            ]);
+            return $employee;
+        });
+
+        return response()->json([
+            'message' => 'บันทึกข้อมูลสำเร็จ',
+            'data'    => $employee->load([
+                'prefix:id,name',
+                'employeeType:id,name',
+                'position:id,name',
+                'duty:id,name',
+                'group:id,name',
+                'work:id,name',
+                'status:id,name,color',
+            ]),
+        ]);
     }
 
     /**
