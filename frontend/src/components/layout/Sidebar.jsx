@@ -21,6 +21,10 @@ const Sidebar = ({ isOpen = true, onClose }) => {
             icon: Users,
             path: '/hr',
             roles: ['admin', 'hr'],
+            children: [
+                { name: 'รายชื่อบุคลากร', path: '/hr' },
+                { name: 'คำนวณเงินสำรอง 3%', path: '/hr/reserve-fund' },
+            ],
         },
         {
             name: 'งานการเงิน',

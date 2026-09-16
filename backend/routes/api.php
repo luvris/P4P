@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ImportController;
 use App\Http\Controllers\Api\EmployeeController;
+use App\Http\Controllers\Api\ReserveFundController;
 
 /*
 |--------------------------------------------------------------------------
@@ -47,6 +48,10 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // Lookups (dropdown ทั้งหมดในคำขอเดียว)
         Route::get('/lookups', [EmployeeController::class, 'lookups']);
+
+        // เงินสำรอง 3% (คำนวณจาก payroll.net_income)
+        Route::get('/reserve-fund',          [ReserveFundController::class, 'summary']);
+        Route::get('/reserve-fund/imports',  [ReserveFundController::class, 'imports']);
     });
 
     // ========================================

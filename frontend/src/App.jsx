@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import LoginPage from './pages/LoginPage';
 import ImportPage from './pages/ImportPage';
 import EmployeePage from './pages/Employee';
+import ReserveFundPage from './pages/ReserveFund';
 import ProtectedRoute from './components/ProtectedRoute';
 import DashboardLayout from './components/layout/DashboardLayout';
 
@@ -19,6 +20,18 @@ function App() {
             <ProtectedRoute allowedRoles={['admin', 'hr']}>
               <DashboardLayout title="บริหารงานบุคคล">
                 <EmployeePage />
+              </DashboardLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        {/* HR — คำนวณเงินสำรอง 3% */}
+        <Route
+          path="/hr/reserve-fund"
+          element={
+            <ProtectedRoute allowedRoles={['admin', 'hr']}>
+              <DashboardLayout title="คำนวณเงินสำรอง 3%">
+                <ReserveFundPage />
               </DashboardLayout>
             </ProtectedRoute>
           }
