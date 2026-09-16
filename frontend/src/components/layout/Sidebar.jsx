@@ -24,6 +24,7 @@ const Sidebar = ({ isOpen = true, onClose }) => {
             children: [
                 { name: 'รายชื่อบุคลากร', path: '/hr' },
                 { name: 'คำนวณเงินสำรอง 3%', path: '/hr/reserve-fund' },
+                { name: 'ปรับฐานเงินเดือน', path: '/hr/salary-adjustments' },
             ],
         },
         {

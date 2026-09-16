@@ -85,6 +85,14 @@ class Employee extends Model
         return $this->hasMany(Payroll::class, 'citizen_id', 'citizen_id');
     }
 
+    /**
+     * ประวัติการปรับฐานเงินเดือน
+     */
+    public function salaryAdjustments()
+    {
+        return $this->hasMany(SalaryAdjustment::class);
+    }
+
     public function creator()
     {
         return $this->belongsTo(User::class, 'created_by');

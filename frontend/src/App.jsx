@@ -3,6 +3,7 @@ import LoginPage from './pages/LoginPage';
 import ImportPage from './pages/ImportPage';
 import EmployeePage from './pages/Employee';
 import ReserveFundPage from './pages/ReserveFund';
+import SalaryAdjustmentPage from './pages/SalaryAdjustment';
 import ProtectedRoute from './components/ProtectedRoute';
 import DashboardLayout from './components/layout/DashboardLayout';
 
@@ -32,6 +33,18 @@ function App() {
             <ProtectedRoute allowedRoles={['admin', 'hr']}>
               <DashboardLayout title="คำนวณเงินสำรอง 3%">
                 <ReserveFundPage />
+              </DashboardLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        {/* HR — ปรับฐานเงินเดือน */}
+        <Route
+          path="/hr/salary-adjustments"
+          element={
+            <ProtectedRoute allowedRoles={['admin', 'hr']}>
+              <DashboardLayout title="ปรับฐานเงินเดือน">
+                <SalaryAdjustmentPage />
               </DashboardLayout>
             </ProtectedRoute>
           }

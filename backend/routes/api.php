@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ImportController;
 use App\Http\Controllers\Api\EmployeeController;
 use App\Http\Controllers\Api\ReserveFundController;
+use App\Http\Controllers\Api\SalaryAdjustmentController;
 
 /*
 |--------------------------------------------------------------------------
@@ -52,6 +53,13 @@ Route::middleware('auth:sanctum')->group(function () {
         // เงินสำรอง 3% (คำนวณจาก payroll.net_income)
         Route::get('/reserve-fund',          [ReserveFundController::class, 'summary']);
         Route::get('/reserve-fund/imports',  [ReserveFundController::class, 'imports']);
+
+        // การปรับฐานเงินเดือน (log: เงินเดือนเก่า/ใหม่/ปรับเพิ่ม)
+        Route::prefix('salary-adjustments')->group(function () {
+            Route::get('/',                 [SalaryAdjustmentController::class, 'index']);
+            Route::get('/summary',          [SalaryAdjustmentController::class, 'summary']);
+            Route::post('/',                [SalaryAdjustmentController::class, 'store']);
+        });
     });
 
     // ========================================
