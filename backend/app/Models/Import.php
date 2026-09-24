@@ -18,6 +18,7 @@ class Import extends Model
      * ฟิลด์ที่สามารถ mass assign ได้
      */
     protected $fillable = [
+        'import_type',
         'file_name',
         'file_path',
         'file_type',
@@ -26,6 +27,9 @@ class Import extends Model
         'success_rows',
         'error_rows',
         'duplicate_rows',
+        'inserted_rows',
+        'updated_rows',
+        'skipped_rows',
         'status',
         'error_message',
     ];
@@ -38,6 +42,9 @@ class Import extends Model
         'success_rows' => 'integer',
         'error_rows' => 'integer',
         'duplicate_rows' => 'integer',
+        'inserted_rows' => 'integer',
+        'updated_rows' => 'integer',
+        'skipped_rows' => 'integer',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];
@@ -47,10 +54,14 @@ class Import extends Model
      */
     protected $attributes = [
         'status' => 'pending',
+        'import_type' => 'payroll',
         'total_rows' => 0,
         'success_rows' => 0,
         'error_rows' => 0,
         'duplicate_rows' => 0,
+        'inserted_rows' => 0,
+        'updated_rows' => 0,
+        'skipped_rows' => 0,
     ];
 
     /*
