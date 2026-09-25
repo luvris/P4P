@@ -97,6 +97,7 @@ const EmployeeTable = ({
                             <th className="px-4 py-3 text-left font-medium">ประเภท</th>
                             <th className="px-4 py-3 text-left font-medium">ตำแหน่ง</th>
                             <th className="px-4 py-3 text-left font-medium">ภารกิจ</th>
+                            <th className="px-4 py-3 text-left font-medium">เลขที่บัญชี</th>
                             <th className="px-4 py-3 text-left font-medium">สถานะ</th>
                         </tr>
                     </thead>
@@ -104,7 +105,7 @@ const EmployeeTable = ({
                     <tbody className="divide-y divide-gray-100">
                         {loading && (
                             <tr>
-                                <td colSpan={6} className="px-4 py-12 text-center text-gray-400">
+                                <td colSpan={7} className="px-4 py-12 text-center text-gray-400">
                                     <div className="inline-block w-6 h-6 border-2 border-gray-300 border-t-amber-600 rounded-full animate-spin" />
                                     <p className="mt-2 text-xs">กำลังโหลด...</p>
                                 </td>
@@ -113,7 +114,7 @@ const EmployeeTable = ({
 
                         {!loading && employees.length === 0 && (
                             <tr>
-                                <td colSpan={6} className="px-4 py-12 text-center text-gray-400">
+                                <td colSpan={7} className="px-4 py-12 text-center text-gray-400">
                                     <Inbox className="w-10 h-10 mx-auto mb-2 text-gray-300" />
                                     <p className="text-sm">ไม่พบข้อมูลบุคลากร</p>
                                 </td>
@@ -145,6 +146,11 @@ const EmployeeTable = ({
                                     </td>
                                     <td className="px-4 py-3 text-gray-600">
                                         {emp.duty?.name || '-'}
+                                    </td>
+                                    <td className="px-4 py-3 text-gray-700 font-mono text-xs">
+                                        {emp.latest_payroll?.bank_account || (
+                                            <span className="text-gray-400 font-sans">-</span>
+                                        )}
                                     </td>
                                     <td className="px-4 py-3">
                                         {emp.status ? (

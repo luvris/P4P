@@ -37,7 +37,8 @@ const buildFormFromEmployee = (emp) => ({
     group_id: emp?.group_id != null ? String(emp.group_id) : '',
     work_id: emp?.work_id != null ? String(emp.work_id) : '',
     status_id: emp?.status_id != null ? String(emp.status_id) : '',
-    bank_account: emp?.bank_account ?? '',
+    // เลขที่บัญชี: ดึงจาก latest_payroll ก่อน ถ้าไม่มีค่อยดึงจาก employees.bank_account
+    bank_account: emp?.latest_payroll?.bank_account ?? emp?.bank_account ?? '',
     note: emp?.note ?? '',
 });
 

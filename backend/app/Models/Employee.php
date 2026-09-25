@@ -51,7 +51,7 @@ class Employee extends Model
         'birth_date' => 'date',
     ];
 
-    protected $appends = ['full_name'];
+    protected $appends = ['full_name', 'bank_account_number'];
 
     // ========== Relationships ==========
 
@@ -119,6 +119,17 @@ class Employee extends Model
         return $this->hasMany(EmploymentHistory::class, 'employee_id');
     }
 
+    /**
+     * ข้อมูล payroll ล่าสุด (สำหรับดึงเลขบัญชี)
+     * ใช้ orderBy แทน latestOfMany เพื่อหลีกเลี่ยง ambiguous column
+     */
+    public function latestPayroll()
+    {
+        return $this->hasOne(Payroll::class, 'citizen_id', 'citizen_id')
+            ->orderByDesc('payrolls.id')
+            ->limit(1);
+    }
+
     public function creator()
     {
         return $this->belongsTo(User::class, 'created_by');
@@ -138,6 +149,14 @@ class Employee extends Model
     {
         $prefix = $this->prefix?->name ?? '';
         return trim("{$prefix}{$this->first_name} {$this->last_name}");
+    }
+
+    /**
+     * ดึงเลขที่บัญชีจาก payrolls ล่าสุด
+     */
+    public function getBankAccountNumberAttribute(): ?string
+    {
+        return $this->latestPayroll?->bank_account;
     }
 
     // ========== Scopes ==========

@@ -29,8 +29,8 @@ class LookupSeeder extends Seeder
         $employeeTypes = [
             'ข้าราชการ',
             'พนักงานราชการ',
-            'พนักงานกระทรวง',
-            'ลูกจ้าง',
+            'ลูกจ้างประจำ',
+            'พนักงานกระทรวงสาธารณสุข',
         ];
 
         foreach ($employeeTypes as $i => $name) {

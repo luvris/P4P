@@ -46,12 +46,6 @@ const FilterBar = ({ filters, onChange, onAdd, lookups = {} }) => {
             disabled: false,
         },
         {
-            key: 'position_id',
-            label: 'ตำแหน่ง',
-            options: lookups.positions || [],
-            disabled: false,
-        },
-        {
             key: 'duty_id',
             label: 'ภารกิจ',
             options: duties,

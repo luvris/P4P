@@ -31,6 +31,7 @@ class EmployeeController extends Controller
             'group:id,name',
             'work:id,name',
             'status:id,name,color',
+            'latestPayroll:id,citizen_id,bank_account', // เพิ่ม relationship เลขที่บัญชี
         ]);
 
         // Search
