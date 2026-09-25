@@ -4,6 +4,7 @@ import ImportPage from './pages/ImportPage';
 import EmployeePage from './pages/Employee';
 import ReserveFundPage from './pages/ReserveFund';
 import SalaryAdjustmentPage from './pages/SalaryAdjustment';
+import HrImportPage from './pages/HrImportPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import DashboardLayout from './components/layout/DashboardLayout';
 
@@ -45,6 +46,18 @@ function App() {
             <ProtectedRoute allowedRoles={['admin', 'hr']}>
               <DashboardLayout title="ปรับฐานเงินเดือน">
                 <SalaryAdjustmentPage />
+              </DashboardLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        {/* HR — นำเข้าข้อมูลบุคลากร */}
+        <Route
+          path="/hr/import"
+          element={
+            <ProtectedRoute allowedRoles={['admin', 'hr']}>
+              <DashboardLayout title="นำเข้าข้อมูลบุคลากร">
+                <HrImportPage />
               </DashboardLayout>
             </ProtectedRoute>
           }

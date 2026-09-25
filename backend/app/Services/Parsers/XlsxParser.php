@@ -7,7 +7,7 @@ use PhpOffice\PhpSpreadsheet\IOFactory;
 class XlsxParser
 {
     /**
-     * Column mapping — ตรงกับ Excel จริง 100%
+     * Fallback column mapping — ตรงกับ Excel จริง (ใช้เมื่อจำชื่อ header ไม่ได้)
      */
     protected array $columnMap = [
         0  => null,                 // ปี
@@ -42,6 +42,31 @@ class XlsxParser
         29 => 'net_income',         // รับจริง
     ];
 
+    /**
+     * ชื่อ header (แบบ normalize แล้ว) → field
+     * รองรับ header ที่สลับตำแหน่ง หรือเขียนไม่ตรงกัน
+     */
+    protected array $fieldAliases = [
+        'employee_type'   => ['ประเภท', 'ประเภทบุคลากร', 'ประเภทพนักงาน', 'employee type', 'employee_type'],
+        'citizen_id'      => ['บัตรประชาชน', 'เลขบัตรประชาชน', 'เลขที่บัตรประชาชน', 'citizen id', 'citizen_id'],
+        'first_name'      => ['ชื่อ', 'ชื่อ (รวมคำนำหน้า)', 'first name'],
+        'last_name'       => ['นามสกุล', 'สกุล', 'last name'],
+        'bank_account'    => ['เลขที่บัญชี', 'เลขบัญชี', 'บัญชี', 'bank account', 'bank_account'],
+        'salary'          => ['เงินเดือน', 'salary'],
+        'living_allowance'=> ['ครองชีพ', 'ค่าครองชีพ', 'living allowance'],
+        'total_income'    => ['รวมรายรับ', 'รวมรายได้', 'total income'],
+        'social_security' => ['ปกส', 'ประกันสังคม', 'social security'],
+        'electricity'     => ['ไฟ', 'ค่าไฟ', 'ค่าไฟฟ้า', 'electricity'],
+        'water'           => ['น้ำ', 'ค่าน้ำ', 'ค่าน้ำประปา', 'water'],
+        'health_insurance'=> ['สสจ', 'สสจ.', 'health insurance'],
+        'cooperative'     => ['ธ.สงเคราะห์', 'สงเคราะห์', 'cooperative'],
+        'life_insurance'  => ['ฌกส', 'ฌกส.', 'life insurance'],
+        'provident_fund'  => ['กองทุนสำรอง', 'provident fund'],
+        'student_loan'    => ['กยศ', 'กยศ.', 'student loan'],
+        'total_deduction' => ['รวมรายจ่าย', 'รวมรายจ่ายทั้งหมด', 'total deduction'],
+        'net_income'      => ['รับจริง', 'net income'],
+    ];
+
     public function supports(string $extension): bool
     {
         return in_array(strtolower($extension), ['xlsx', 'xls']);
@@ -53,24 +78,36 @@ class XlsxParser
         $worksheet = $spreadsheet->getActiveSheet();
         $rows = $worksheet->toArray(null, true, true, false);
 
-        // ลบ Header row
-        array_shift($rows);
+        // อ่าน header row เพื่อจับคู่ชื่อคอลัมน์
+        $header = array_shift($rows) ?? [];
+
+        $headerIndexByName = [];
+        foreach ($header as $index => $name) {
+            $name = $this->normalizeHeader($name);
+            if ($name === '') {
+                continue;
+            }
+
+            $headerIndexByName[$name] ??= $index;
+        }
+
+        // หา column index ของแต่ละ field (header-first, positional fallback)
+        $resolved = [];
+        foreach ($this->fields() as $field) {
+            $resolved[$field] = $this->resolveColumnIndex($field, $headerIndexByName);
+        }
 
         $data = [];
 
-        foreach ($rows as $rowIndex => $row) {
+        foreach ($rows as $row) {
             if ($this->isEmptyRow($row)) {
                 continue;
             }
 
             $record = [];
 
-            foreach ($this->columnMap as $index => $field) {
-                if ($field === null) {
-                    continue;
-                }
-
-                $value = $row[$index] ?? null;
+            foreach ($resolved as $field => $index) {
+                $value = $index === null ? null : ($row[$index] ?? null);
                 $record[$field] = $this->normalizeValue($value, $field);
             }
 
@@ -78,6 +115,48 @@ class XlsxParser
         }
 
         return $data;
+    }
+
+    /**
+     * รายการ field (canonical keys) ที่จะส่งต่อให้ service
+     */
+    protected function fields(): array
+    {
+        return array_values(array_filter($this->columnMap, fn ($field) => $field !== null));
+    }
+
+    /**
+     * หา column index ของ field หนึ่ง ๆ
+     */
+    protected function resolveColumnIndex(string $field, array $headerIndexByName): ?int
+    {
+        // 1) จับคู่จากชื่อ header
+        foreach ($this->fieldAliases[$field] ?? [] as $alias) {
+            if (array_key_exists($alias, $headerIndexByName)) {
+                return $headerIndexByName[$alias];
+            }
+        }
+
+        // 2) fallback ตามตำแหน่งคอลัมน์เดิม
+        foreach ($this->columnMap as $index => $mappedField) {
+            if ($mappedField === $field) {
+                return $index;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * normalize ชื่อ header ให้เปรียบเทียบได้
+     */
+    protected function normalizeHeader($name): string
+    {
+        $name = mb_strtolower(trim((string) $name));
+        $name = str_replace(['_', '-'], ' ', $name);
+        $name = preg_replace('/\s+/', ' ', $name);
+
+        return $name;
     }
 
     protected function isEmptyRow(array $row): bool

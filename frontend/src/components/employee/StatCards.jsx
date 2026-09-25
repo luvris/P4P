@@ -6,7 +6,7 @@ const StatCards = ({ stats, loading = false }) => {
         { key: 'total', label: 'บุคลากรทั้งหมด', icon: Users, color: 'bg-green-100 text-green-700' },
         { key: 'ข้าราชการ', label: 'ข้าราชการ', icon: UserCheck, color: 'bg-emerald-100 text-emerald-700' },
         { key: 'พนักงานราชการ', label: 'พนักงานราชการ', icon: Briefcase, color: 'bg-blue-100 text-blue-700' },
-        { key: 'พนักงานกระทรวง', label: 'พนักงานกระทรวง', icon: Building2, color: 'bg-yellow-100 text-yellow-700' },
+        { key: 'พนักงานกระทรวงสาธารณสุข', label: 'พนักงานกระทรวงสาธารณสุข', icon: Building2, color: 'bg-yellow-100 text-yellow-700' },
         { key: 'ลูกจ้าง', label: 'ลูกจ้าง', icon: UserCircle, color: 'bg-purple-100 text-purple-700' },
     ];
 

@@ -12,6 +12,7 @@ class Employee extends Model
 
     protected $fillable = [
         'citizen_id',
+        'employee_id', // PID - รหัสพนักงานภายใน
         'prefix_id',
         'first_name',
         'last_name',
@@ -27,10 +28,27 @@ class Employee extends Model
         'note',
         'created_by',
         'updated_by',
+        // New HR fields
+        'hid',
+        'sex',
+        'blood_type',
+        'birth_date',
+        'tel',
+        'mobile',
+        'address1',
+        'address2',
+        'emergency_contact_prefix',
+        'emergency_contact_name',
+        'emergency_contact_lname',
+        'leaves_by',
+        'finger',
+        'email',
+        'line_token',
     ];
 
     protected $casts = [
         'salary' => 'decimal:2',
+        'birth_date' => 'date',
     ];
 
     protected $appends = ['full_name'];
@@ -91,6 +109,14 @@ class Employee extends Model
     public function salaryAdjustments()
     {
         return $this->hasMany(SalaryAdjustment::class);
+    }
+
+    /**
+     * ประวัติการจ้างงาน
+     */
+    public function employmentHistories()
+    {
+        return $this->hasMany(EmploymentHistory::class, 'employee_id');
     }
 
     public function creator()

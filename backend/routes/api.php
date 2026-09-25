@@ -4,6 +4,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ImportController;
+use App\Http\Controllers\Api\HrImportController;
 use App\Http\Controllers\Api\EmployeeController;
 use App\Http\Controllers\Api\ReserveFundController;
 use App\Http\Controllers\Api\SalaryAdjustmentController;
@@ -49,6 +50,13 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // Lookups (dropdown ทั้งหมดในคำขอเดียว)
         Route::get('/lookups', [EmployeeController::class, 'lookups']);
+
+        // นำเข้าข้อมูลบุคลากร (HR Import) — แยกจาก payroll import
+        Route::prefix('imports')->group(function () {
+            Route::post('/preview', [HrImportController::class, 'preview']);
+            Route::post('/',        [HrImportController::class, 'store']);
+            Route::get('/',         [HrImportController::class, 'index']);
+        });
 
         // เงินสำรอง 3% (คำนวณจาก payroll.net_income)
         Route::get('/reserve-fund',          [ReserveFundController::class, 'summary']);
