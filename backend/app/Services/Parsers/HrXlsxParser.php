@@ -172,46 +172,27 @@ class HrXlsxParser
      */
     protected function parseCombinedFile(array $rows, array $header): array
     {
-        // Merge column maps
-        $allColumnMap = array_merge($this->employeeColumnMap, $this->employmentColumnMap);
+        // Parse employees และ employments แยกกัน (ไม่ merge เพราะจะทับกัน)
+        $employeeRows = $this->parseRows($rows, $header, $this->employeeColumnMap);
+        $employmentRows = $this->parseRows($rows, $header, $this->employmentColumnMap);
         
-        // Parse ทุกแถว
-        $allData = $this->parseRows($rows, $header, $allColumnMap);
-        
-        // แยกข้อมูล
+        // แยกเอาเฉพาะ employees ที่ไม่ซ้ำ PID
         $employees = [];
-        $employments = [];
         $seenPids = [];
         
-        foreach ($allData as $row) {
+        foreach ($employeeRows as $row) {
             $pid = $row['employee_id'] ?? null;
-            if (!$pid) continue;
+            if (!$pid || isset($seenPids[$pid])) continue;
             
-            // เก็บข้อมูล employee (ครั้งแรกที่เจอ PID)
-            if (!isset($seenPids[$pid])) {
-                $employeeData = [];
-                foreach ($this->employeeColumnMap as $excelCol => $dbField) {
-                    if (isset($row[$dbField])) {
-                        $employeeData[$dbField] = $row[$dbField];
-                    }
-                }
-                if (!empty($employeeData)) {
-                    $employees[] = $employeeData;
-                    $seenPids[$pid] = true;
-                }
-            }
-            
-            // เก็บประวัติ (ทุกแถว) - ต้องมี serial_number
+            $employees[] = $row;
+            $seenPids[$pid] = true;
+        }
+        
+        // เก็บ employments ทุกแถวที่มี serial_number
+        $employments = [];
+        foreach ($employmentRows as $row) {
             if (!empty($row['serial_number'])) {
-                $employmentData = [];
-                foreach ($this->employmentColumnMap as $excelCol => $dbField) {
-                    if (isset($row[$dbField])) {
-                        $employmentData[$dbField] = $row[$dbField];
-                    }
-                }
-                if (!empty($employmentData)) {
-                    $employments[] = $employmentData;
-                }
+                $employments[] = $row;
             }
         }
         

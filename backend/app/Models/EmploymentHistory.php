@@ -14,7 +14,7 @@ class EmploymentHistory extends Model
         'employee_id',
         'serial_number',
         'wid',
-        'employee_name',
+        'employee_type',
         'work_id',
         'manager',
         'position',

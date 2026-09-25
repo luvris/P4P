@@ -391,7 +391,7 @@ class HrImportService
                     'employee_id'      => $employee->id,
                     'serial_number'    => $row['serial_number'],
                     'wid'              => $row['wid'],
-                    'employee_name'    => $row['employee_name'] ?? null,
+                    'employee_type'    => $row['employee_type'] ?? null,
                     'work_id'          => $row['work_id'],
                     'manager'          => $row['manager'],
                     'position'         => $row['position'],
