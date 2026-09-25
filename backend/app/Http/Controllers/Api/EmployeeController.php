@@ -135,14 +135,18 @@ class EmployeeController extends Controller
             ->pluck('count', 'name')
             ->toArray();
 
-        return response()->json([
-            'total'          => $total,
-            'ข้าราชการ'        => $byType['ข้าราชการ'] ?? 0,
-            'พนักงานราชการ'   => $byType['พนักงานราชการ'] ?? 0,
-            'พนักงานกระทรวง'  => $byType['พนักงานกระทรวง'] ?? 0,
-            'ลูกจ้าง'         => $byType['ลูกจ้าง'] ?? 0,
-            'by_type'        => $byType,
-        ]);
+        // สร้าง response แบบ dynamic จากข้อมูลจริง
+        $response = [
+            'total' => $total,
+            'by_type' => $byType,
+        ];
+        
+        // เพิ่มแต่ละประเภทเป็น key แยก (backward compatible)
+        foreach ($byType as $name => $count) {
+            $response[$name] = $count;
+        }
+
+        return response()->json($response);
     }
 
     /**

@@ -27,9 +27,9 @@ class HrXlsxParser
         'MOBILE'     => 'mobile',
         'ADDRESS1'   => 'address1',
         'ADDRESS2'   => 'address2',
-        'ETTL'       => 'emergency_contact_prefix',
-        'ENAME'      => 'emergency_contact_name',
-        'ELNAME'     => 'emergency_contact_lname',
+        'ETTL'       => 'english_prefix',           // คำนำหน้าภาษาอังกฤษ
+        'ENAME'      => 'english_first_name',       // ชื่อภาษาอังกฤษ
+        'ELNAME'     => 'english_last_name',        // นามสกุลภาษาอังกฤษ
         'STATUS'     => 'status',
         'LEAVES_BY'  => 'leaves_by',
         'FINGER'     => 'finger',
@@ -54,6 +54,7 @@ class HrXlsxParser
         'DATEE'     => 'end_date',
         'EXP'       => 'experience',
         'MARK'      => 'mark',
+        'STATUS'    => 'status',              // สถานะของแต่ละประวัติ
         'PAYROLL'   => 'payroll',
         'DATEDIRE'  => 'appointment_date',
         'CODEDIRE'  => 'appointment_code',
@@ -87,7 +88,7 @@ class HrXlsxParser
         'wid'                        => ['wid'],
         'employee_type'              => ['employee', 'ประเภท'],
         'work_id'                    => ['workid'],
-        'manager'                    => ['manage', 'ผู้จัดการ'],
+        'manager'                    => ['manage', 'ผ้จัดการ'],
         'position'                   => ['position', 'ตำแหน่ง'],
         'class'                      => ['class', 'ระดับ'],
         'condition'                  => ['conditio', 'เงื่อนไข'],
@@ -95,6 +96,7 @@ class HrXlsxParser
         'end_date'                   => ['datee', 'วันที่สิ้นสุด'],
         'experience'                 => ['exp', 'ประสบการณ์'],
         'mark'                       => ['mark', 'หมายเหตุ'],
+        'status'                     => ['status', 'สถานะ'],  // เพิ่ม status ใน employment_histories
         'payroll'                    => ['payroll', 'เงินเดือน'],
         'appointment_date'           => ['datedire'],
         'appointment_code'           => ['codedire'],
@@ -125,7 +127,10 @@ class HrXlsxParser
             
             $type = $this->detectDataType($header);
             
-            if ($type === 'employee') {
+            if ($type === 'combined') {
+                // ไฟล์รวม - แยกข้อมูล employee และ employment
+                return $this->parseCombinedFile($rows, $header);
+            } elseif ($type === 'employee') {
                 return [
                     'employees'   => $this->parseRows($rows, $header, $this->employeeColumnMap),
                     'employments' => [],
@@ -137,6 +142,83 @@ class HrXlsxParser
                 ];
             }
         }
+    }
+    
+    /**
+     * ตรวจจับว่าเป็นไฟล์แบบไหน
+     */
+    protected function detectDataType(array $header): string
+    {
+        $normalizedHeader = array_map(fn($h) => $this->normalizeHeader($h), $header);
+        
+        // เช็คว่ามี column ทั้ง employee และ employment หรือไม่
+        $hasEmployeeColumns = in_array('pid', $normalizedHeader) && 
+                             in_array('name', $normalizedHeader);
+        
+        $hasEmploymentColumns = in_array('ser', $normalizedHeader) && 
+                               in_array('position', $normalizedHeader);
+        
+        if ($hasEmployeeColumns && $hasEmploymentColumns) {
+            return 'combined'; // ไฟล์รวม
+        } elseif ($hasEmployeeColumns) {
+            return 'employee';
+        } else {
+            return 'employment';
+        }
+    }
+    
+    /**
+     * Parse ไฟล์ที่มีข้อมูลรวมกัน
+     */
+    protected function parseCombinedFile(array $rows, array $header): array
+    {
+        // Merge column maps
+        $allColumnMap = array_merge($this->employeeColumnMap, $this->employmentColumnMap);
+        
+        // Parse ทุกแถว
+        $allData = $this->parseRows($rows, $header, $allColumnMap);
+        
+        // แยกข้อมูล
+        $employees = [];
+        $employments = [];
+        $seenPids = [];
+        
+        foreach ($allData as $row) {
+            $pid = $row['employee_id'] ?? null;
+            if (!$pid) continue;
+            
+            // เก็บข้อมูล employee (ครั้งแรกที่เจอ PID)
+            if (!isset($seenPids[$pid])) {
+                $employeeData = [];
+                foreach ($this->employeeColumnMap as $excelCol => $dbField) {
+                    if (isset($row[$dbField])) {
+                        $employeeData[$dbField] = $row[$dbField];
+                    }
+                }
+                if (!empty($employeeData)) {
+                    $employees[] = $employeeData;
+                    $seenPids[$pid] = true;
+                }
+            }
+            
+            // เก็บประวัติ (ทุกแถว) - ต้องมี serial_number
+            if (!empty($row['serial_number'])) {
+                $employmentData = [];
+                foreach ($this->employmentColumnMap as $excelCol => $dbField) {
+                    if (isset($row[$dbField])) {
+                        $employmentData[$dbField] = $row[$dbField];
+                    }
+                }
+                if (!empty($employmentData)) {
+                    $employments[] = $employmentData;
+                }
+            }
+        }
+        
+        return [
+            'employees'   => $employees,
+            'employments' => $employments,
+        ];
     }
 
     protected function parseSheet($worksheet, array $columnMap): array
@@ -173,20 +255,6 @@ class HrXlsxParser
         }
 
         return $data;
-    }
-
-    protected function detectDataType(array $header): string
-    {
-        $normalizedHeader = array_map(fn($h) => $this->normalizeHeader($h), $header);
-        
-        $employmentMarkers = ['ser', 'dates', 'datee', 'conditio'];
-        foreach ($employmentMarkers as $marker) {
-            if (in_array($marker, $normalizedHeader)) {
-                return 'employment';
-            }
-        }
-        
-        return 'employee';
     }
 
     protected function resolveColumnIndex(string $field, array $headerIndexByName): ?int

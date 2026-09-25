@@ -24,6 +24,7 @@ class EmploymentHistory extends Model
         'end_date',
         'experience',
         'mark',
+        'status',
         'payroll',
         'appointment_date',
         'appointment_code',

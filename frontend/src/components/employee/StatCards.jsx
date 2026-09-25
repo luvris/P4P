@@ -1,14 +1,41 @@
-import { memo } from 'react';
-import { Users, UserCheck, Briefcase, Building2, UserCircle } from 'lucide-react';
+import { memo, useMemo } from 'react';
+import { Users, UserCheck, Briefcase, Building2, UserCircle, User } from 'lucide-react';
 
 const StatCards = ({ stats, loading = false }) => {
-    const cards = [
-        { key: 'total', label: 'บุคลากรทั้งหมด', icon: Users, color: 'bg-green-100 text-green-700' },
-        { key: 'ข้าราชการ', label: 'ข้าราชการ', icon: UserCheck, color: 'bg-emerald-100 text-emerald-700' },
-        { key: 'พนักงานราชการ', label: 'พนักงานราชการ', icon: Briefcase, color: 'bg-blue-100 text-blue-700' },
-        { key: 'พนักงานกระทรวงสาธารณสุข', label: 'พนักงานกระทรวงสาธารณสุข', icon: Building2, color: 'bg-yellow-100 text-yellow-700' },
-        { key: 'ลูกจ้าง', label: 'ลูกจ้าง', icon: UserCircle, color: 'bg-purple-100 text-purple-700' },
-    ];
+    // Icon mapping สำหรับประเภทต่างๆ
+    const iconMap = {
+        'ข้าราชการ': { icon: UserCheck, color: 'bg-emerald-100 text-emerald-700' },
+        'พนักงานราชการ': { icon: Briefcase, color: 'bg-blue-100 text-blue-700' },
+        'พนักงานกระทรวงสาธารณสุข': { icon: Building2, color: 'bg-yellow-100 text-yellow-700' },
+        'พนักงานกระทรวง': { icon: Building2, color: 'bg-yellow-100 text-yellow-700' },
+        'ลูกจ้าง': { icon: UserCircle, color: 'bg-purple-100 text-purple-700' },
+        'ลูกจ้างประจำ': { icon: UserCircle, color: 'bg-purple-100 text-purple-700' },
+        'ลูกจ้างชั่วคราว': { icon: User, color: 'bg-pink-100 text-pink-700' },
+    };
+
+    // สร้าง cards แบบ dynamic จาก stats ที่ได้รับมา
+    const cards = useMemo(() => {
+        if (!stats) return [];
+
+        const result = [
+            { key: 'total', label: 'บุคลากรทั้งหมด', icon: Users, color: 'bg-green-100 text-green-700' }
+        ];
+
+        // เพิ่มประเภทอื่นๆ จาก by_type
+        if (stats.by_type) {
+            Object.entries(stats.by_type).forEach(([name, count]) => {
+                const mapping = iconMap[name] || { icon: User, color: 'bg-gray-100 text-gray-700' };
+                result.push({
+                    key: name,
+                    label: name,
+                    icon: mapping.icon,
+                    color: mapping.color
+                });
+            });
+        }
+
+        return result;
+    }, [stats]);
 
     return (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
