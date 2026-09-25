@@ -451,6 +451,7 @@ class HrImportService
     {
         $employees = Employee::all();
         $positionMap = DB::table('positions')->pluck('id', 'name')->toArray();
+        $employeeTypeMap = DB::table('employee_types')->pluck('id', 'name')->toArray();
         $statusMap = DB::table('employee_statuses')->pluck('id', 'name')->toArray();
         
         // Status mapping
@@ -487,6 +488,40 @@ class HrImportService
             }
             
             $updateData = [];
+            
+            // แปลง employee_type
+            if (!empty($currentHistory->employee_type)) {
+                // ใช้ cache ก่อน
+                if (isset($employeeTypeMap[$currentHistory->employee_type])) {
+                    $updateData['employee_type_id'] = $employeeTypeMap[$currentHistory->employee_type];
+                } else {
+                    // Query หาจาก DB
+                    $type = DB::table('employee_types')->where('name', $currentHistory->employee_type)->first();
+                    if ($type) {
+                        $employeeTypeMap[$currentHistory->employee_type] = $type->id;
+                        $updateData['employee_type_id'] = $type->id;
+                    } else {
+                        // สร้างใหม่
+                        try {
+                            $newTypeId = DB::table('employee_types')->insertGetId([
+                                'name' => $currentHistory->employee_type,
+                                'sort_order' => 999,
+                                'created_at' => now(),
+                                'updated_at' => now(),
+                            ]);
+                            $employeeTypeMap[$currentHistory->employee_type] = $newTypeId;
+                            $updateData['employee_type_id'] = $newTypeId;
+                        } catch (\Exception $e) {
+                            // Duplicate - query again
+                            $type = DB::table('employee_types')->where('name', $currentHistory->employee_type)->first();
+                            if ($type) {
+                                $employeeTypeMap[$currentHistory->employee_type] = $type->id;
+                                $updateData['employee_type_id'] = $type->id;
+                            }
+                        }
+                    }
+                }
+            }
             
             // แปลง position
             if (!empty($currentHistory->position)) {
