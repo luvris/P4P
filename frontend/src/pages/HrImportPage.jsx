@@ -2,9 +2,13 @@ import React, { useState } from 'react';
 import toast from 'react-hot-toast';
 import { AlertTriangle, FileText, ArrowLeft, CheckCircle2, Upload } from 'lucide-react';
 import HrFileDropZone from '../components/features/import/HrFileDropZone';
+import DutyAssignmentImportPanel from '../components/features/import/DutyAssignmentImportPanel';
 import { hrImportService } from '../services/hrImportService';
 
-const HrImportPage = () => {
+/**
+ * ส่วนนำเข้า "ข้อมูลบุคลากร" (ของเดิม — flow และ service ไม่เปลี่ยน)
+ */
+const HrEmployeeImportSection = () => {
     const [selectedFile, setSelectedFile] = useState(null);
     const [previewing, setPreviewing] = useState(false);
     const [preview, setPreview] = useState(null); // { preview: [], warnings: [], warning_count, total_rows }
@@ -151,16 +155,7 @@ const HrImportPage = () => {
     }
 
     return (
-        <div className="max-w-7xl mx-auto">
-            <div className="mb-6">
-                <h2 className="text-2xl font-bold text-[#8B5E3C] mb-1">
-                    นำเข้าข้อมูลบุคลากร
-                </h2>
-                <p className="text-gray-500 text-sm">
-                    รองรับไฟล์ Excel (.xlsx) — ระบบจะอัปเดตข้อมูลบุคลากรตามเลขบัตรประชาชน
-                </p>
-            </div>
-
+        <div>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Left */}
                 <div className="lg:col-span-2 space-y-6">
@@ -422,6 +417,68 @@ const HrImportPage = () => {
                     )}
                 </div>
             </div>
+        </div>
+    );
+};
+
+/**
+ * ประเภทการนำเข้าข้อมูล
+ * - employee: ของเดิม (นำเข้าข้อมูลบุคลากร)
+ * - duty_assignment: ของใหม่ (นำเข้าข้อมูลการอยู่ภารกิจ)
+ */
+const IMPORT_TYPES = [
+    {
+        value: 'employee',
+        label: 'นำเข้าข้อมูลบุคลากร',
+        description: 'รองรับไฟล์ Excel (.xlsx) — ระบบจะอัปเดตข้อมูลบุคลากรตามเลขบัตรประชาชน',
+    },
+    {
+        value: 'duty_assignment',
+        label: 'นำเข้าข้อมูลการอยู่ภารกิจของบุคลากร',
+        description: 'รองรับไฟล์ Excel (.xlsx) — เชื่อมบุคลากรผ่าน PID แล้วอัปเดตภารกิจ/กลุ่มงาน/งาน',
+    },
+];
+
+const HrImportPage = () => {
+    const [importType, setImportType] = useState('employee');
+
+    const active = IMPORT_TYPES.find((t) => t.value === importType) ?? IMPORT_TYPES[0];
+
+    return (
+        <div className="max-w-7xl mx-auto">
+            <div className="mb-6">
+                <h2 className="text-2xl font-bold text-[#8B5E3C] mb-1">{active.label}</h2>
+                <p className="text-gray-500 text-sm">{active.description}</p>
+            </div>
+
+            {/* เลือกประเภทการนำเข้าข้อมูล */}
+            <div className="bg-white rounded-2xl border border-[#E6D3A3] p-5 mb-6">
+                <label
+                    htmlFor="import-type"
+                    className="block text-sm font-medium text-gray-700 mb-2"
+                >
+                    ประเภทการนำเข้าข้อมูล
+                </label>
+                <select
+                    id="import-type"
+                    value={importType}
+                    onChange={(e) => setImportType(e.target.value)}
+                    className="w-full md:w-96 px-4 py-2.5 rounded-xl border border-gray-300 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                >
+                    {IMPORT_TYPES.map((type) => (
+                        <option key={type.value} value={type.value}>
+                            {type.label}
+                        </option>
+                    ))}
+                </select>
+            </div>
+
+            {/* แต่ละประเภทใช้ component + service ของตัวเอง (state แยกกันสมบูรณ์) */}
+            {importType === 'employee' ? (
+                <HrEmployeeImportSection />
+            ) : (
+                <DutyAssignmentImportPanel />
+            )}
         </div>
     );
 };

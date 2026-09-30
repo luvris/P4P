@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ImportController;
 use App\Http\Controllers\Api\HrImportController;
+use App\Http\Controllers\Api\DutyAssignmentImportController;
 use App\Http\Controllers\Api\EmployeeController;
 use App\Http\Controllers\Api\ReserveFundController;
 use App\Http\Controllers\Api\SalaryAdjustmentController;
@@ -56,6 +57,13 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::post('/preview', [HrImportController::class, 'preview']);
             Route::post('/',        [HrImportController::class, 'store']);
             Route::get('/',         [HrImportController::class, 'index']);
+        });
+
+        // นำเข้าข้อมูลการอยู่ภารกิจของบุคลากร — แยกจาก HR Import เดิมทั้งหมด
+        Route::prefix('duty-assignment-imports')->group(function () {
+            Route::post('/preview', [DutyAssignmentImportController::class, 'preview']);
+            Route::post('/',        [DutyAssignmentImportController::class, 'store']);
+            Route::get('/',         [DutyAssignmentImportController::class, 'index']);
         });
 
         // เงินสำรอง 3% (คำนวณจาก payroll.net_income)
