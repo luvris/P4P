@@ -19,8 +19,11 @@ const LoginPage = () => {
 
       setTimeout(() => {
         switch (user.role) {
+          // admin/hr เข้าหน้า Dashboard (บริหารงานบุคคล / รายชื่อบุคลากร)
           case 'admin':
           case 'hr':
+            navigate('/dashboard');
+            break;
           case 'finance':
             navigate('/finance/import');
             break;

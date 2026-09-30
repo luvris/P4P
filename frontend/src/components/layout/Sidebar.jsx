@@ -14,16 +14,17 @@ const Sidebar = ({ isOpen = true, onClose }) => {
             name: 'Dashboard',
             icon: LayoutDashboard,
             path: '/dashboard',
-            roles: ['admin', 'hr', 'finance'],
+            // ต้องมีสิทธิ์อ่าน /api/hr/employees จึงจำกัดเป็น admin, hr
+            roles: ['admin', 'hr'],
         },
         {
             name: 'บริหารงานบุคคล',
             icon: Users,
-            path: '/hr',
+            path: '#',
             roles: ['admin', 'hr'],
             children: [
-                { name: 'รายชื่อบุคลากร', path: '/hr' },
-                { name: 'คำนวณเงินสำรอง 3%', path: '/hr/reserve-fund' },
+                // { name: 'รายชื่อบุคลากร', path: '/hr' },
+                { name: 'คำนวณเงินสำรอง', path: '/hr/reserve-fund' },
                 { name: 'ปรับฐานเงินเดือน', path: '/hr/salary-adjustments' },
                 { name: 'นำเข้าข้อมูลบุคลากร', path: '/hr/import' },
             ],
@@ -103,37 +104,45 @@ const Sidebar = ({ isOpen = true, onClose }) => {
 
                     return (
                         <div key={item.path}>
-                            <Link
-                                to={item.path}
-                                onClick={handleItemClick}
-                                className={`flex items-center justify-between gap-3 px-4 py-3 rounded-lg transition-colors ${isActive
-                                        ? 'bg-[#F5EEDC] text-[#8B5E3C]'
-                                        : 'text-gray-600 hover:bg-gray-50'
-                                    }`}
-                            >
-                                <div className="flex items-center gap-3 min-w-0">
-                                    <Icon size={20} className="shrink-0" />
-                                    <span className="text-sm font-medium truncate">{item.name}</span>
-                                </div>
+                            {hasChildren ? (
+                                // เมนูที่มีเมนูย่อย — คลิกที่ตัวเมนูเพื่อเปิด/ปิดเมนูย่อย (ไม่ย้ายหน้า)
+                                <button
+                                    type="button"
+                                    onClick={() => toggleMenu(item.path)}
+                                    aria-expanded={isMenuOpen}
+                                    aria-controls={`submenu-${item.path}`}
+                                    className={`w-full flex items-center justify-between gap-3 px-4 py-3 rounded-lg transition-colors text-left ${isActive
+                                            ? 'bg-[#F5EEDC] text-[#8B5E3C]'
+                                            : 'text-gray-600 hover:bg-gray-50'
+                                        }`}
+                                >
+                                    <div className="flex items-center gap-3 min-w-0">
+                                        <Icon size={20} className="shrink-0" />
+                                        <span className="text-sm font-medium truncate">{item.name}</span>
+                                    </div>
 
-                                {hasChildren && (
-                                    <button
-                                        type="button"
-                                        onClick={(e) => {
-                                            e.preventDefault();
-                                            e.stopPropagation();
-                                            toggleMenu(item.path);
-                                        }}
-                                        className="p-1 hover:bg-black/5 rounded shrink-0"
-                                        aria-label="toggle submenu"
-                                    >
+                                    <span className="p-1 shrink-0" aria-hidden="true">
                                         {isMenuOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                                    </button>
-                                )}
-                            </Link>
+                                    </span>
+                                </button>
+                            ) : (
+                                <Link
+                                    to={item.path}
+                                    onClick={handleItemClick}
+                                    className={`flex items-center justify-between gap-3 px-4 py-3 rounded-lg transition-colors ${isActive
+                                            ? 'bg-[#F5EEDC] text-[#8B5E3C]'
+                                            : 'text-gray-600 hover:bg-gray-50'
+                                        }`}
+                                >
+                                    <div className="flex items-center gap-3 min-w-0">
+                                        <Icon size={20} className="shrink-0" />
+                                        <span className="text-sm font-medium truncate">{item.name}</span>
+                                    </div>
+                                </Link>
+                            )}
 
                             {hasChildren && isMenuOpen && (
-                                <div className="ml-4 mt-1 space-y-1">
+                                <div id={`submenu-${item.path}`} className="ml-4 mt-1 space-y-1">
                                     {item.children.map((child) => (
                                         <Link
                                             key={child.path}

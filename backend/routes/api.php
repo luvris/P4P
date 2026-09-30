@@ -66,9 +66,19 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::get('/',         [DutyAssignmentImportController::class, 'index']);
         });
 
-        // เงินสำรอง 3% (คำนวณจาก payroll.net_income)
+        // เงินสำรอง (คำนวณจาก payroll — ต้องระบุเปอร์เซ็นต์เอง)
         Route::get('/reserve-fund',          [ReserveFundController::class, 'summary']);
         Route::get('/reserve-fund/imports',  [ReserveFundController::class, 'imports']);
+
+        // บันทึก/ดูประวัติผลการคำนวณตามปีงบประมาณ (รายงวด)
+        Route::get('/reserve-fund/fiscal-years',  [ReserveFundController::class, 'fiscalYears']);
+        Route::get('/reserve-fund/accumulated',   [ReserveFundController::class, 'accumulatedSummary']);
+        Route::get('/reserve-fund/calculations',  [ReserveFundController::class, 'calculations']);
+        Route::post('/reserve-fund/calculations', [ReserveFundController::class, 'store']);
+
+        // ยืนยัน/ยกเลิกการยืนยันงวด — ยอดสะสมนับเฉพาะงวดที่ยืนยันแล้ว
+        Route::post('/reserve-fund/calculations/{calculation}/confirm',   [ReserveFundController::class, 'confirm']);
+        Route::post('/reserve-fund/calculations/{calculation}/unconfirm', [ReserveFundController::class, 'unconfirm']);
 
         // การปรับฐานเงินเดือน (log: เงินเดือนเก่า/ใหม่/ปรับเพิ่ม)
         Route::prefix('salary-adjustments')->group(function () {

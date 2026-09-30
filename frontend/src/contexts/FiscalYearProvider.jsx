@@ -1,0 +1,63 @@
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import FiscalYearContext from './fiscalYearContext';
+import { currentFiscalYear, isValidFiscalYear } from '../utils/fiscalYear';
+import { reserveFundService } from '../services/reserveFundService';
+
+const STORAGE_KEY = 'fiscalYear';
+
+const readStored = () => {
+    const stored = Number(localStorage.getItem(STORAGE_KEY));
+    return isValidFiscalYear(stored) ? stored : currentFiscalYear();
+};
+
+export const FiscalYearProvider = ({ children }) => {
+    const [fiscalYear, setFiscalYearState] = useState(readStored);
+    // ปีงบที่มีผลการคำนวณบันทึกไว้แล้วเท่านั้น (ใช้เป็นตัวเลือกใน dropdown)
+    const [fiscalYearOptions, setFiscalYearOptions] = useState([]);
+
+    useEffect(() => {
+        localStorage.setItem(STORAGE_KEY, String(fiscalYear));
+    }, [fiscalYear]);
+
+    const refreshFiscalYears = useCallback(async () => {
+        // ยังไม่ login ก็ไม่ต้องยิง request (state เริ่มต้นเป็นลิสต์ว่างอยู่แล้ว)
+        if (!localStorage.getItem('token')) {
+            return [];
+        }
+
+        try {
+            const response = await reserveFundService.getFiscalYears();
+            const years = (response.data || [])
+                .map(Number)
+                .filter(isValidFiscalYear)
+                .sort((a, b) => b - a);
+            setFiscalYearOptions(years);
+            return years;
+        } catch (err) {
+            console.error('Failed to fetch fiscal years:', err);
+            setFiscalYearOptions([]);
+            return [];
+        }
+    }, []);
+
+    useEffect(() => {
+        (async () => {
+            await refreshFiscalYears();
+        })();
+    }, [refreshFiscalYears]);
+
+    const setFiscalYear = useCallback((year) => {
+        const numeric = Number(year);
+        if (!isValidFiscalYear(numeric)) return;
+        setFiscalYearState(numeric);
+    }, []);
+
+    const value = useMemo(
+        () => ({ fiscalYear, setFiscalYear, fiscalYearOptions, refreshFiscalYears }),
+        [fiscalYear, setFiscalYear, fiscalYearOptions, refreshFiscalYears],
+    );
+
+    return <FiscalYearContext.Provider value={value}>{children}</FiscalYearContext.Provider>;
+};
+
+export default FiscalYearProvider;

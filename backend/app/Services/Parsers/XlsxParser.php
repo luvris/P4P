@@ -20,10 +20,10 @@ class XlsxParser
         7  => 'salary',             // เงินเดือน
         8  => null,                 // ตกเบิก (ข้าม)
         9  => 'living_allowance',   // ครองชีพ
-        10 => null,                 // พตส (ข้าม)
+        10 => 'position_allowance', // พตส (เงินประจำตำแหน่ง)
         11 => null,                 // รักษา (ข้าม)
         12 => null,                 // เล่าเรียน (ข้าม)
-        13 => null,                 // ล่วงเวลา (ข้าม)
+        13 => 'overtime',           // ล่วงเวลา (OT)
         14 => null,                 // บ่ายดึก (ข้าม)
         15 => null,                 // อื่นๆ (ข้าม)
         16 => 'total_income',       // รวมรายรับ
@@ -54,6 +54,9 @@ class XlsxParser
         'bank_account'    => ['เลขที่บัญชี', 'เลขบัญชี', 'บัญชี', 'bank account', 'bank_account'],
         'salary'          => ['เงินเดือน', 'salary'],
         'living_allowance'=> ['ครองชีพ', 'ค่าครองชีพ', 'living allowance'],
+        'position_allowance' => ['พตส', 'พตส.', 'เงินประจำตำแหน่ง', 'ประจำตำแหน่ง', 'position allowance'],
+        'overtime'        => ['ล่วงเวลา', 'ค่าล่วงเวลา', 'โอที', 'ot', 'overtime'],
+        'p4p_income'      => ['p4p', 'เงิน p4p', 'p 4 p', 'p4p income'],
         'total_income'    => ['รวมรายรับ', 'รวมรายได้', 'total income'],
         'social_security' => ['ปกส', 'ประกันสังคม', 'social security'],
         'electricity'     => ['ไฟ', 'ค่าไฟ', 'ค่าไฟฟ้า', 'electricity'],
@@ -119,10 +122,16 @@ class XlsxParser
 
     /**
      * รายการ field (canonical keys) ที่จะส่งต่อให้ service
+     *
+     * รวม field ที่ไม่มีตำแหน่งคอลัมน์ fallback (เช่น p4p_income)
+     * ซึ่งจับคู่ได้จากชื่อ header เท่านั้น
      */
     protected function fields(): array
     {
-        return array_values(array_filter($this->columnMap, fn ($field) => $field !== null));
+        $fromColumnMap = array_values(array_filter($this->columnMap, fn ($field) => $field !== null));
+        $fromAliases = array_keys($this->fieldAliases);
+
+        return array_values(array_unique([...$fromColumnMap, ...$fromAliases]));
     }
 
     /**
@@ -190,6 +199,9 @@ class XlsxParser
         if (in_array($field, [
             'salary',
             'living_allowance',
+            'overtime',
+            'position_allowance',
+            'p4p_income',
             'total_income',
             'social_security',
             'electricity',

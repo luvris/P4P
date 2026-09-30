@@ -7,15 +7,29 @@ import SalaryAdjustmentPage from './pages/SalaryAdjustment';
 import HrImportPage from './pages/HrImportPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import DashboardLayout from './components/layout/DashboardLayout';
+import { FiscalYearProvider } from './contexts/FiscalYearProvider';
 
 function App() {
   return (
-    <BrowserRouter>
+    <FiscalYearProvider>
+      <BrowserRouter>
       <Routes>
         {/* Public */}
         <Route path="/" element={<LoginPage />} />
 
-        {/* HR — บริหารงานบุคคล */}
+        {/* Dashboard — หน้าหลักหลัง login: บริหารงานบุคคล / รายชื่อบุคลากร */}
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute allowedRoles={['admin', 'hr']}>
+              <DashboardLayout title="รายชื่อบุคลากร">
+                <EmployeePage />
+              </DashboardLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        {/* HR — บริหารงานบุคคล (route เดิม คงไว้ไม่ให้ลิงก์เดิมพัง) */}
         <Route
           path="/hr"
           element={
@@ -27,12 +41,12 @@ function App() {
           }
         />
 
-        {/* HR — คำนวณเงินสำรอง 3% */}
+        {/* HR — คำนวณเงินสำรอง (ระบุเปอร์เซ็นต์เอง) */}
         <Route
           path="/hr/reserve-fund"
           element={
             <ProtectedRoute allowedRoles={['admin', 'hr']}>
-              <DashboardLayout title="คำนวณเงินสำรอง 3%">
+              <DashboardLayout title="คำนวณเงินสำรอง">
                 <ReserveFundPage />
               </DashboardLayout>
             </ProtectedRoute>
@@ -78,7 +92,8 @@ function App() {
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-    </BrowserRouter>
+      </BrowserRouter>
+    </FiscalYearProvider>
   );
 }
 
