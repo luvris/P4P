@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import FiscalYearContext from './fiscalYearContext';
 import { currentFiscalYear, isValidFiscalYear } from '../utils/fiscalYear';
-import { reserveFundService } from '../services/reserveFundService';
+import { fiscalYearService } from '../services/fiscalYearService';
 
 const STORAGE_KEY = 'fiscalYear';
 
@@ -12,7 +12,7 @@ const readStored = () => {
 
 export const FiscalYearProvider = ({ children }) => {
     const [fiscalYear, setFiscalYearState] = useState(readStored);
-    // ปีงบที่มีผลการคำนวณบันทึกไว้แล้วเท่านั้น (ใช้เป็นตัวเลือกใน dropdown)
+    // ปีงบที่มีข้อมูลจริงในระบบ + ปีงบปัจจุบัน (ตัวเลือกใน dropdown)
     const [fiscalYearOptions, setFiscalYearOptions] = useState([]);
 
     useEffect(() => {
@@ -26,7 +26,7 @@ export const FiscalYearProvider = ({ children }) => {
         }
 
         try {
-            const response = await reserveFundService.getFiscalYears();
+            const response = await fiscalYearService.getFiscalYears();
             const years = (response.data || [])
                 .map(Number)
                 .filter(isValidFiscalYear)

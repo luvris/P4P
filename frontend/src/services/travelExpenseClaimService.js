@@ -2,6 +2,23 @@ import api from './api';
 
 const BASE = '/finance/travel-expense-claims';
 
+/** แปลง error ของ request แบบ blob ให้ได้ข้อความจริงจาก backend */
+const readErrorMessage = async (err) => {
+    const fallback = 'ไม่สามารถส่งออก Excel ได้';
+    const data = err.response?.data;
+
+    if (data instanceof Blob) {
+        try {
+            const parsed = JSON.parse(await data.text());
+            return parsed.message || fallback;
+        } catch {
+            return fallback;
+        }
+    }
+
+    return data?.message || err.message || fallback;
+};
+
 export const travelExpenseClaimService = {
     /** รายการใบเบิกของปีงบประมาณที่เลือก */
     getClaims: async (params = {}) => {
@@ -52,11 +69,26 @@ export const travelExpenseClaimService = {
         return response.data;
     },
 
-    /** ดาวน์โหลด Excel (เฉพาะเอกสารที่ยืนยันแล้ว) */
+    /**
+     * ดาวน์โหลด Excel (เฉพาะเอกสารที่ยืนยันแล้ว)
+     *
+     * ต้อง override Accept เพราะ axios instance ตั้ง application/json ไว้
+     * และขยาย timeout เพราะการสร้างไฟล์ใช้เวลานานกว่า request ปกติ
+     */
     exportExcel: async (id, fileName) => {
-        const response = await api.get(`${BASE}/${id}/export`, {
-            responseType: 'blob',
-        });
+        let response;
+        try {
+            response = await api.get(`${BASE}/${id}/export`, {
+                responseType: 'blob',
+                timeout: 60000,
+                headers: {
+                    Accept: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                },
+            });
+        } catch (err) {
+            // error ที่ตอบกลับมาเป็น blob ต้องอ่านเป็นข้อความก่อนจึงเห็น message จริง
+            throw new Error(await readErrorMessage(err));
+        }
 
         const url = window.URL.createObjectURL(response.data);
         const link = document.createElement('a');

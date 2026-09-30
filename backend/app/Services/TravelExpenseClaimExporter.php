@@ -41,7 +41,15 @@ class TravelExpenseClaimExporter
             $claim->fiscal_year
         );
 
-        $tempPath = tempnam(sys_get_temp_dir(), 'tec_');
+        // ไม่ใช้ tempnam()/sys_get_temp_dir() เพราะบางเครื่อง temp dir ของระบบ
+        // ชี้ไปโฟลเดอร์ที่เขียนไม่ได้ (เช่น C:\Windows) แล้วทำให้ export ล้มทั้งคำขอ
+        $tempDir = storage_path('app/tmp');
+        if (! is_dir($tempDir)) {
+            mkdir($tempDir, 0775, true);
+        }
+
+        $tempPath = $tempDir . DIRECTORY_SEPARATOR . 'tec_' . uniqid('', true) . '.xlsx';
+
         (new Xlsx($spreadsheet))->save($tempPath);
         $spreadsheet->disconnectWorksheets();
 

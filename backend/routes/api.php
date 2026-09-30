@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\ImportController;
 use App\Http\Controllers\Api\HrImportController;
 use App\Http\Controllers\Api\DutyAssignmentImportController;
 use App\Http\Controllers\Api\EmployeeController;
+use App\Http\Controllers\Api\FiscalYearController;
 use App\Http\Controllers\Api\ReserveFundController;
 use App\Http\Controllers\Api\SalaryAdjustmentController;
 use App\Http\Controllers\Api\TravelExpenseClaimController;
@@ -29,6 +30,9 @@ Route::middleware('auth:sanctum')->group(function () {
     // Auth
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me',      [AuthController::class, 'me']);
+
+    // ตัวเลือกปีงบประมาณบน Header — state ระดับแอป ทุก role ที่ login อ่านได้
+    Route::get('/fiscal-years', [FiscalYearController::class, 'index']);
 
     // ========================================
     // Admin Routes (role: admin)

@@ -52,8 +52,9 @@ const ClaimListPage = () => {
                 claim.id,
                 `travel-expense-claim-${claim.document_no}-FY${claim.fiscal_year}.xlsx`,
             );
-        } catch {
-            toast.error('ส่งออกได้เฉพาะเอกสารที่ยืนยันแล้ว');
+        } catch (err) {
+            // แสดงข้อความจริงจาก backend ไม่เดาสาเหตุเอง
+            toast.error(err.message || 'ไม่สามารถส่งออก Excel ได้');
         }
     };
 
