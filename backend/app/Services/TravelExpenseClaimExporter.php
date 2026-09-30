@@ -1,0 +1,182 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\TravelExpenseClaim;
+use App\Support\ThaiFiscalYear;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Style\Border;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
+
+/**
+ * ส่งออกใบเบิกค่าใช้จ่ายเดินทางไปราชการเป็น Excel
+ *
+ * ใช้ phpoffice/phpspreadsheet ที่ project มีอยู่แล้ว (ตัวเดียวกับ XlsxParser)
+ */
+class TravelExpenseClaimExporter
+{
+    /** คอลัมน์ A–H ตามแบบฟอร์มอ้างอิง */
+    private const HEADERS = [
+        'ลำดับ', 'รายชื่อ', 'นามสกุล', 'ค่าเบี้ยเลี้ยง',
+        'ค่าที่พัก', 'ค่าพาหนะ', 'ค่าใช้จ่ายอื่น', 'รวมเงิน',
+    ];
+
+    private const WIDTHS = [
+        'A' => 8, 'B' => 22, 'C' => 22, 'D' => 14,
+        'E' => 14, 'F' => 14, 'G' => 16, 'H' => 16,
+    ];
+
+    /** 0 แสดงเป็น "-" ให้ตรงกับแบบฟอร์ม */
+    private const MONEY_FORMAT = '#,##0.00;-#,##0.00;"-"';
+
+    public function download(TravelExpenseClaim $claim): BinaryFileResponse
+    {
+        $spreadsheet = $this->build($claim);
+
+        $fileName = sprintf(
+            'travel-expense-claim-%s-FY%d.xlsx',
+            $claim->document_no ?: $claim->id,
+            $claim->fiscal_year
+        );
+
+        $tempPath = tempnam(sys_get_temp_dir(), 'tec_');
+        (new Xlsx($spreadsheet))->save($tempPath);
+        $spreadsheet->disconnectWorksheets();
+
+        return response()
+            ->download($tempPath, $fileName, [
+                'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            ])
+            ->deleteFileAfterSend(true);
+    }
+
+    private function build(TravelExpenseClaim $claim): Spreadsheet
+    {
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('ใบเบิกค่าใช้จ่าย');
+
+        foreach (self::WIDTHS as $column => $width) {
+            $sheet->getColumnDimension($column)->setWidth($width);
+        }
+
+        $headerRow = $this->writeHeading($sheet, $claim);
+        $this->writeTableHeader($sheet, $headerRow);
+
+        $row = $headerRow + 1;
+        $firstDataRow = $row;
+
+        foreach ($claim->items as $index => $item) {
+            $sheet->fromArray([
+                $index + 1,
+                $item->first_name,
+                $item->last_name,
+                (float) $item->allowance_amount,
+                (float) $item->accommodation_amount,
+                (float) $item->transportation_amount,
+                (float) $item->other_amount,
+                (float) $item->total_amount,
+            ], null, "A{$row}");
+            $row++;
+        }
+
+        $lastDataRow = $row - 1;
+
+        $this->writeTotalRow($sheet, $claim, $row);
+        $this->applyTableStyle($sheet, $headerRow, $row, $firstDataRow, $lastDataRow);
+        $this->writeSignature($sheet, $row + 3);
+
+        return $spreadsheet;
+    }
+
+    /** หัวเรื่องด้านบน — merge A:H ทุกบรรทัด จัดกลาง คืนค่าแถวของหัวตาราง */
+    private function writeHeading($sheet, TravelExpenseClaim $claim): int
+    {
+        $lines = [
+            "(ภาคปีงบประมาณ {$claim->fiscal_year})",
+            $claim->expense_category,
+            $claim->organization_name ?: '',
+            $claim->claim_period
+                ? 'ประจำเดือน ' . ThaiFiscalYear::periodLabel($claim->claim_period)
+                : '',
+        ];
+
+        if ($claim->isCancelled()) {
+            $lines[] = '*** เอกสารนี้ถูกยกเลิก ***';
+        }
+
+        $row = 1;
+        foreach ($lines as $line) {
+            if ($line === '') {
+                continue;
+            }
+
+            $sheet->setCellValue("A{$row}", $line);
+            $sheet->mergeCells("A{$row}:H{$row}");
+            $sheet->getStyle("A{$row}")->getFont()->setBold(true)->setSize($row === 1 ? 14 : 12);
+            $sheet->getStyle("A{$row}")->getAlignment()
+                ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            $row++;
+        }
+
+        return $row + 1;
+    }
+
+    private function writeTableHeader($sheet, int $row): void
+    {
+        $sheet->fromArray(self::HEADERS, null, "A{$row}");
+
+        $style = $sheet->getStyle("A{$row}:H{$row}");
+        $style->getFont()->setBold(true);
+        $style->getAlignment()
+            ->setHorizontal(Alignment::HORIZONTAL_CENTER)
+            ->setVertical(Alignment::VERTICAL_CENTER)
+            ->setWrapText(true);
+    }
+
+    private function writeTotalRow($sheet, TravelExpenseClaim $claim, int $row): void
+    {
+        $items = $claim->items;
+
+        $sheet->setCellValue("A{$row}", 'รวม');
+        $sheet->mergeCells("A{$row}:C{$row}");
+        $sheet->setCellValue("D{$row}", round((float) $items->sum('allowance_amount'), 2));
+        $sheet->setCellValue("E{$row}", round((float) $items->sum('accommodation_amount'), 2));
+        $sheet->setCellValue("F{$row}", round((float) $items->sum('transportation_amount'), 2));
+        $sheet->setCellValue("G{$row}", round((float) $items->sum('other_amount'), 2));
+        $sheet->setCellValue("H{$row}", round((float) $items->sum('total_amount'), 2));
+
+        $sheet->getStyle("A{$row}:H{$row}")->getFont()->setBold(true);
+        $sheet->getStyle("A{$row}")->getAlignment()
+            ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+    }
+
+    /** border ทั้งตาราง + format จำนวนเงิน + จัดกลางคอลัมน์ลำดับ */
+    private function applyTableStyle($sheet, int $headerRow, int $totalRow, int $firstDataRow, int $lastDataRow): void
+    {
+        $sheet->getStyle("A{$headerRow}:H{$totalRow}")
+            ->getBorders()
+            ->getAllBorders()
+            ->setBorderStyle(Border::BORDER_THIN);
+
+        $sheet->getStyle("D{$headerRow}:H{$totalRow}")
+            ->getNumberFormat()
+            ->setFormatCode(self::MONEY_FORMAT);
+
+        if ($lastDataRow >= $firstDataRow) {
+            $sheet->getStyle("A{$firstDataRow}:A{$lastDataRow}")
+                ->getAlignment()
+                ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        }
+    }
+
+    private function writeSignature($sheet, int $row): void
+    {
+        $sheet->setCellValue("E{$row}", '(ลงชื่อ)..................................................ผู้เบิก-จ่าย');
+        $sheet->mergeCells("E{$row}:H{$row}");
+        $sheet->getStyle("E{$row}")->getAlignment()
+            ->setHorizontal(Alignment::HORIZONTAL_LEFT);
+    }
+}

@@ -5,6 +5,8 @@ import EmployeePage from './pages/Employee';
 import ReserveFundPage from './pages/ReserveFund';
 import SalaryAdjustmentPage from './pages/SalaryAdjustment';
 import HrImportPage from './pages/HrImportPage';
+import ClaimListPage from './pages/TravelExpenseClaim/ClaimListPage';
+import ClaimFormPage from './pages/TravelExpenseClaim/ClaimFormPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import DashboardLayout from './components/layout/DashboardLayout';
 import { FiscalYearProvider } from './contexts/FiscalYearProvider';
@@ -85,6 +87,49 @@ function App() {
             <ProtectedRoute allowedRoles={['admin', 'finance']}>
               <DashboardLayout title="นำเข้าข้อมูลการเงิน">
                 <ImportPage />
+              </DashboardLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Finance — จัดทำใบเบิกค่าใช้จ่ายเดินทางไปราชการ */}
+        <Route
+          path="/finance/travel-expense-claims"
+          element={
+            <ProtectedRoute allowedRoles={['admin', 'finance']}>
+              <DashboardLayout title="จัดทำใบเบิกค่าใช้จ่าย">
+                <ClaimListPage />
+              </DashboardLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/finance/travel-expense-claims/create"
+          element={
+            <ProtectedRoute allowedRoles={['admin', 'finance']}>
+              <DashboardLayout title="สร้างใบเบิกค่าใช้จ่าย">
+                <ClaimFormPage mode="edit" />
+              </DashboardLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/finance/travel-expense-claims/:id"
+          element={
+            <ProtectedRoute allowedRoles={['admin', 'finance']}>
+              <DashboardLayout title="รายละเอียดใบเบิกค่าใช้จ่าย">
+                <ClaimFormPage mode="view" />
+              </DashboardLayout>
+            </ProtectedRoute>
+          }
+        />
+        {/* แก้ไขได้เฉพาะเอกสารร่าง — backend บังคับด้วย is_editable */}
+        <Route
+          path="/finance/travel-expense-claims/:id/edit"
+          element={
+            <ProtectedRoute allowedRoles={['admin', 'finance']}>
+              <DashboardLayout title="แก้ไขใบเบิกค่าใช้จ่าย">
+                <ClaimFormPage mode="edit" />
               </DashboardLayout>
             </ProtectedRoute>
           }

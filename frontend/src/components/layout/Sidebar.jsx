@@ -36,6 +36,7 @@ const Sidebar = ({ isOpen = true, onClose }) => {
             roles: ['admin', 'finance'],
             children: [
                 { name: 'นำเข้าข้อมูลการเงิน', path: '/finance/import' },
+                { name: 'จัดทำใบเบิกค่าใช้จ่าย', path: '/finance/travel-expense-claims' },
             ],
         },
     ];

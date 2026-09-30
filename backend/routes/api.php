@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\DutyAssignmentImportController;
 use App\Http\Controllers\Api\EmployeeController;
 use App\Http\Controllers\Api\ReserveFundController;
 use App\Http\Controllers\Api\SalaryAdjustmentController;
+use App\Http\Controllers\Api\TravelExpenseClaimController;
 
 /*
 |--------------------------------------------------------------------------
@@ -102,5 +103,21 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/imports',           [ImportController::class, 'store']);
         Route::get('/imports',            [ImportController::class, 'index']);
         Route::get('/imports/{import}',   [ImportController::class, 'show']);
+
+        // ใบเบิกค่าใช้จ่ายเดินทางไปราชการ
+        Route::prefix('travel-expense-claims')->group(function () {
+            // route คงที่ต้องมาก่อน {claim} เพื่อไม่ให้ถูกจับเป็น parameter
+            Route::get('/options',   [TravelExpenseClaimController::class, 'options']);
+            Route::get('/employees', [TravelExpenseClaimController::class, 'employees']);
+
+            Route::get('/',          [TravelExpenseClaimController::class, 'index']);
+            Route::post('/',         [TravelExpenseClaimController::class, 'store']);
+            Route::get('/{claim}',   [TravelExpenseClaimController::class, 'show']);
+            Route::put('/{claim}',   [TravelExpenseClaimController::class, 'update']);
+
+            Route::post('/{claim}/confirm', [TravelExpenseClaimController::class, 'confirm']);
+            Route::post('/{claim}/cancel',  [TravelExpenseClaimController::class, 'cancel']);
+            Route::get('/{claim}/export',   [TravelExpenseClaimController::class, 'export']);
+        });
     });
 });
