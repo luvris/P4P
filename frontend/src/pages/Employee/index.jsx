@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import useEmployees from '../../hooks/useEmployees';
 import useLookups from '../../hooks/useLookups';
 import useDebounce from '../../hooks/useDebounce';
+import useAuth from '../../hooks/useAuth';
 
 import StatCards from '../../components/employee/StatCards';
 import FilterBar from '../../components/employee/FilterBar';
@@ -11,6 +12,10 @@ import EmployeeTable from '../../components/employee/EmployeeTable';
 import AddEmployeeDrawer from '../../components/employee/AddEmployeeDrawer';
 
 const EmployeePage = () => {
+    // finance เข้าดูได้แบบ read-only (แก้ไข/เพิ่มข้อมูลไม่ได้)
+    const { hasRole } = useAuth();
+    const canEdit = hasRole('admin', 'hr');
+
     const [drawerOpen, setDrawerOpen] = useState(false);
     const [editingEmployee, setEditingEmployee] = useState(null);
 
@@ -52,7 +57,8 @@ const EmployeePage = () => {
         setDrawerOpen(true);
     }, []);
 
-    const handleEditClick = useCallback((emp) => {
+    // คลิกชื่อในตาราง: admin/hr = แก้ไข, finance = ดูรายละเอียดแบบอ่านเท่านั้น
+    const handleRowClick = useCallback((emp) => {
         setEditingEmployee(emp);
         setDrawerOpen(true);
     }, []);
@@ -101,7 +107,7 @@ const EmployeePage = () => {
             <FilterBar
                 filters={filterBarFilters}
                 onChange={handleFilterChange}
-                onAdd={handleAddClick}
+                onAdd={canEdit ? handleAddClick : undefined}
                 lookups={lookups}
             />
 
@@ -111,15 +117,17 @@ const EmployeePage = () => {
                 loading={loading}
                 onPageChange={handlePageChange}
                 onPerPageChange={handlePerPageChange}
-                onEdit={handleEditClick}
+                onEdit={handleRowClick}
+                rowActionLabel={canEdit ? 'แก้ไขข้อมูล' : 'ดูรายละเอียด'}
             />
 
             <AddEmployeeDrawer
                 open={drawerOpen}
                 onClose={handleDrawerClose}
                 lookups={lookups}
-                onSubmit={editingEmployee ? handleUpdateEmployee : handleCreateEmployee}
+                onSubmit={canEdit ? (editingEmployee ? handleUpdateEmployee : handleCreateEmployee) : undefined}
                 employee={editingEmployee}
+                readOnly={!canEdit}
             />
         </div>
     );

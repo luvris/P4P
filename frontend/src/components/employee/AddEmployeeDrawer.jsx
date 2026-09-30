@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react';
-import { X, Save, UserPlus, Pencil } from 'lucide-react';
+import { X, Save, UserPlus, Pencil, Eye } from 'lucide-react';
 
 /**
  * Initial form state
@@ -57,7 +57,13 @@ const Field = memo(({ label, required, error, children }) => (
 ));
 Field.displayName = 'Field';
 
-const AddEmployeeDrawer = ({ open, onClose, lookups = {}, onSubmit, employee = null }) => {
+/**
+ * AddEmployeeDrawer — เพิ่ม / แก้ไข / ดูรายละเอียดบุคลากร
+ *
+ * readOnly = true → ดูข้อมูลได้เท่านั้น (finance) ทุก field ถูก disable
+ * และไม่มีปุ่มบันทึก
+ */
+const AddEmployeeDrawer = ({ open, onClose, lookups = {}, onSubmit, employee = null, readOnly = false }) => {
     const isEditing = Boolean(employee);
 
     const [form, setForm] = useState(INITIAL_FORM);
@@ -130,6 +136,8 @@ const AddEmployeeDrawer = ({ open, onClose, lookups = {}, onSubmit, employee = n
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (readOnly) return;
+
         setSubmitting(true);
         setErrors({});
         setGlobalError('');
@@ -158,9 +166,10 @@ const AddEmployeeDrawer = ({ open, onClose, lookups = {}, onSubmit, employee = n
         `w-full px-3 py-2 text-sm border rounded-lg transition-colors
      focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent
      ${errors[name] ? 'border-red-400 bg-red-50' : 'border-gray-300'}
+     ${readOnly ? 'bg-gray-50 text-gray-600 cursor-default' : ''}
      ${name === 'group_id' && !form.duty_id ? 'bg-gray-50 text-gray-400 cursor-not-allowed' : ''}
      ${name === 'work_id' && !form.group_id ? 'bg-gray-50 text-gray-400 cursor-not-allowed' : ''}
-     ${name !== 'group_id' && name !== 'work_id' ? 'bg-white' : ''}`;
+     ${!readOnly && name !== 'group_id' && name !== 'work_id' ? 'bg-white' : ''}`;
 
     return (
         <>
@@ -170,13 +179,19 @@ const AddEmployeeDrawer = ({ open, onClose, lookups = {}, onSubmit, employee = n
                 {/* Header */}
                 <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
                     <div className="flex items-center gap-2">
-                        {isEditing ? (
+                        {readOnly ? (
+                            <Eye className="w-5 h-5 text-amber-600" />
+                        ) : isEditing ? (
                             <Pencil className="w-5 h-5 text-amber-600" />
                         ) : (
                             <UserPlus className="w-5 h-5 text-amber-600" />
                         )}
                         <h2 className="text-base font-semibold text-gray-800">
-                            {isEditing ? 'แก้ไขบุคลากร' : 'เพิ่มบุคลากร'}
+                            {readOnly
+                                ? 'รายละเอียดบุคลากร'
+                                : isEditing
+                                    ? 'แก้ไขบุคลากร'
+                                    : 'เพิ่มบุคลากร'}
                         </h2>
                     </div>
                     <button
@@ -193,13 +208,21 @@ const AddEmployeeDrawer = ({ open, onClose, lookups = {}, onSubmit, employee = n
                 <form
                     id="add-employee-form"
                     onSubmit={handleSubmit}
-                    className="flex-1 overflow-y-auto px-5 py-4 space-y-4"
+                    className="flex-1 overflow-y-auto px-5 py-4"
                 >
-                    {globalError && (
-                        <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-700">
-                            {globalError}
-                        </div>
-                    )}
+                    {/* fieldset disabled → ทุก input/select/textarea ข้างในแก้ไขไม่ได้ */}
+                    <fieldset disabled={readOnly} className="space-y-4 min-w-0">
+                        {readOnly && (
+                            <p className="rounded-lg bg-gray-50 border border-gray-200 px-3 py-2 text-xs text-gray-600">
+                                ดูข้อมูลได้เท่านั้น — สิทธิ์ของคุณไม่สามารถแก้ไขข้อมูลบุคลากรได้
+                            </p>
+                        )}
+
+                        {globalError && (
+                            <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-700">
+                                {globalError}
+                            </div>
+                        )}
 
                     {/* คำนำหน้า */}
                     <Field label="คำนำหน้า" name="prefix_id" required error={errors.prefix_id}>
@@ -384,6 +407,7 @@ const AddEmployeeDrawer = ({ open, onClose, lookups = {}, onSubmit, employee = n
                             className={`${inputCls('note')} resize-none`}
                         />
                     </Field>
+                    </fieldset>
                 </form>
 
                 {/* Footer */}
@@ -392,10 +416,13 @@ const AddEmployeeDrawer = ({ open, onClose, lookups = {}, onSubmit, employee = n
                         type="button"
                         onClick={onClose}
                         disabled={submitting}
-                        className="flex-1 px-4 py-2.5 text-sm font-medium border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50"
+                        className={`px-4 py-2.5 text-sm font-medium border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 ${
+                            readOnly ? 'w-full' : 'flex-1'
+                        }`}
                     >
-                        ยกเลิก
+                        {readOnly ? 'ปิด' : 'ยกเลิก'}
                     </button>
+                    {!readOnly && (
                     <button
                         type="submit"
                         form="add-employee-form"
@@ -414,6 +441,7 @@ const AddEmployeeDrawer = ({ open, onClose, lookups = {}, onSubmit, employee = n
                             </>
                         )}
                     </button>
+                    )}
                 </div>
             </aside>
         </>

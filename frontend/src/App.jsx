@@ -17,11 +17,12 @@ function App() {
         {/* Public */}
         <Route path="/" element={<LoginPage />} />
 
-        {/* Dashboard — หน้าหลักหลัง login: บริหารงานบุคคล / รายชื่อบุคลากร */}
+        {/* Dashboard — หน้าหลักหลัง login: บริหารงานบุคคล / รายชื่อบุคลากร
+            finance เข้าดูได้แบบ read-only (ปุ่มเพิ่ม/แก้ไขถูกซ่อน) */}
         <Route
           path="/dashboard"
           element={
-            <ProtectedRoute allowedRoles={['admin', 'hr']}>
+            <ProtectedRoute allowedRoles={['admin', 'hr', 'finance']}>
               <DashboardLayout title="รายชื่อบุคลากร">
                 <EmployeePage />
               </DashboardLayout>

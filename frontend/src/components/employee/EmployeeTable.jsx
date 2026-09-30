@@ -22,6 +22,8 @@ const EmployeeTable = ({
     onPageChange,
     onPerPageChange,
     onEdit,
+    // ข้อความ tooltip ของปุ่มชื่อ — ต่างกันตามสิทธิ์ (แก้ไข / ดูรายละเอียด)
+    rowActionLabel = 'แก้ไขข้อมูล',
 }) => {
     // ============================================
     // State: Jump to page input
@@ -130,6 +132,7 @@ const EmployeeTable = ({
                                             <button
                                                 type="button"
                                                 onClick={() => onEdit(emp)}
+                                                title={`${rowActionLabel}: ${emp.full_name || `${emp.first_name} ${emp.last_name}`}`}
                                                 className="text-left text-amber-700 hover:text-amber-900 hover:underline"
                                             >
                                                 {emp.full_name || `${emp.first_name} ${emp.last_name}`}

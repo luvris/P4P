@@ -88,14 +88,16 @@ const FilterBar = ({ filters, onChange, onAdd, lookups = {} }) => {
                     />
                 </div>
 
-                <button
-                    type="button"
-                    onClick={onAdd}
-                    className="flex items-center justify-center gap-2 px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium rounded-lg transition-colors shrink-0"
-                >
-                    <Plus className="w-4 h-4" />
-                    เพิ่มบุคลากร
-                </button>
+                {onAdd && (
+                    <button
+                        type="button"
+                        onClick={onAdd}
+                        className="flex items-center justify-center gap-2 px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium rounded-lg transition-colors shrink-0"
+                    >
+                        <Plus className="w-4 h-4" />
+                        เพิ่มบุคลากร
+                    </button>
+                )}
             </div>
 
             <div className="flex flex-wrap gap-3">

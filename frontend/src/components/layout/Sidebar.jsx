@@ -14,8 +14,8 @@ const Sidebar = ({ isOpen = true, onClose }) => {
             name: 'Dashboard',
             icon: LayoutDashboard,
             path: '/dashboard',
-            // ต้องมีสิทธิ์อ่าน /api/hr/employees จึงจำกัดเป็น admin, hr
-            roles: ['admin', 'hr'],
+            // finance เข้าดูได้แบบ read-only
+            roles: ['admin', 'hr', 'finance'],
         },
         {
             name: 'บริหารงานบุคคล',

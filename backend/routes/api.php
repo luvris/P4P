@@ -37,20 +37,27 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     // ========================================
+    // HR Read-only Routes (role: admin, hr, finance)
+    // finance ดูหน้า Dashboard ได้ แต่แก้ข้อมูลไม่ได้
+    // ========================================
+    Route::middleware('role:admin,hr,finance')->prefix('hr')->group(function () {
+        Route::get('/employees',       [EmployeeController::class, 'index']);
+        Route::get('/employees/stats', [EmployeeController::class, 'stats']);
+
+        // Lookups (dropdown ทั้งหมดในคำขอเดียว) — ใช้กรองข้อมูลในหน้า view
+        Route::get('/lookups', [EmployeeController::class, 'lookups']);
+    });
+
+    // ========================================
     // HR Routes (role: admin, hr)
     // ========================================
     Route::middleware('role:admin,hr')->prefix('hr')->group(function () {
 
-        // Employee Management
+        // Employee Management — เขียนข้อมูลได้เฉพาะ admin, hr
         Route::prefix('employees')->group(function () {
-            Route::get('/',               [EmployeeController::class, 'index']);
             Route::post('/',              [EmployeeController::class, 'store']);
-            Route::get('/stats',          [EmployeeController::class, 'stats']);
             Route::put('/{employee}',     [EmployeeController::class, 'update']);
         });
-
-        // Lookups (dropdown ทั้งหมดในคำขอเดียว)
-        Route::get('/lookups', [EmployeeController::class, 'lookups']);
 
         // นำเข้าข้อมูลบุคลากร (HR Import) — แยกจาก payroll import
         Route::prefix('imports')->group(function () {
