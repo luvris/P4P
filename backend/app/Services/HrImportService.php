@@ -117,17 +117,11 @@ class HrImportService
             return [
                 'import'   => $import,
                 'summary'  => [
-                    'employees' => [
-                        'inserted' => $employeeInserted,
-                        'updated'  => $employeeUpdated,
-                        'skipped'  => $employeeSkipped,
-                        'errors'   => $employeeErrors,
-                    ],
-                    'employments' => [
-                        'inserted' => $employmentInserted,
-                        'skipped'  => $employmentSkipped,
-                        'errors'   => $employmentErrors,
-                    ],
+                    'total'    => count($parsedData['employees'] ?? []) + count($parsedData['employments'] ?? []),
+                    'inserted' => $employeeInserted + $employmentInserted,
+                    'updated'  => $employeeUpdated,
+                    'skipped'  => $employeeSkipped + $employmentSkipped,
+                    'errors'   => $employeeErrors + $employmentErrors,
                 ],
                 'warnings'      => $rowErrors,
                 'warning_count' => count($rowErrors),
@@ -170,7 +164,11 @@ class HrImportService
                 // Validate citizen_id
                 if (empty($row['citizen_id']) || strlen($row['citizen_id']) !== 13) {
                     $skipped++;
-                    $rowErrors[] = "แถว " . ($index + 2) . " (Employee): เลขบัตรประชาชนไม่ถูกต้อง";
+                    $rowErrors[] = [
+                        'row'   => $index + 2,
+                        'type'  => 'employee',
+                        'error' => 'เลขบัตรประชาชนไม่ถูกต้อง (ต้องเป็นตัวเลข 13 หลัก)',
+                    ];
                     continue;
                 }
 
@@ -259,7 +257,11 @@ class HrImportService
                 }
             } catch (\Exception $e) {
                 $errors++;
-                $rowErrors[] = "แถว " . ($index + 2) . " (Employee): " . $e->getMessage();
+                $rowErrors[] = [
+                    'row'   => $index + 2,
+                    'type'  => 'employee',
+                    'error' => $e->getMessage(),
+                ];
                 Log::error("HR Import Employee Error: " . $e->getMessage(), ['row' => $row]);
             }
         }
@@ -292,14 +294,22 @@ class HrImportService
                 // ใช้ employee_id (PID) เป็นตัวเชื่อมแทน citizen_id
                 if (empty($row['employee_id'])) {
                     $skipped++;
-                    $rowErrors[] = "แถว " . ($index + 2) . " (Employment): ไม่พบเลขไอดีพนักงาน (PID)";
+                    $rowErrors[] = [
+                        'row'   => $index + 2,
+                        'type'  => 'employment',
+                        'error' => 'ไม่พบเลขไอดีพนักงาน (PID)',
+                    ];
                     continue;
                 }
                 
                 // เช็ค serial_number ว่าง (เป็น unique key)
                 if (empty($row['serial_number'])) {
                     $skipped++;
-                    $rowErrors[] = "แถว " . ($index + 2) . " (Employment): ไม่พบเลขที่ (serial_number)";
+                    $rowErrors[] = [
+                        'row'   => $index + 2,
+                        'type'  => 'employment',
+                        'error' => 'ไม่พบเลขที่ (serial_number)',
+                    ];
                     continue;
                 }
 
@@ -314,7 +324,11 @@ class HrImportService
                 
                 if (!$employee) {
                     $skipped++;
-                    $rowErrors[] = "แถว " . ($index + 2) . " (Employment): ไม่พบพนักงานที่มี PID = " . $row['employee_id'];
+                    $rowErrors[] = [
+                        'row'   => $index + 2,
+                        'type'  => 'employment',
+                        'error' => 'ไม่พบพนักงานที่มี PID = ' . $row['employee_id'],
+                    ];
                     continue;
                 }
                 
@@ -428,7 +442,11 @@ class HrImportService
                 }
             } catch (\Exception $e) {
                 $errors++;
-                $rowErrors[] = "แถว " . ($index + 2) . " (Employment): " . $e->getMessage();
+                $rowErrors[] = [
+                    'row'   => $index + 2,
+                    'type'  => 'employment',
+                    'error' => $e->getMessage(),
+                ];
                 Log::error("HR Import Employment Error: " . $e->getMessage(), ['row' => $row]);
             }
         }

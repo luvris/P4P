@@ -6,6 +6,7 @@ import ReserveFundPage from './pages/ReserveFund';
 import SalaryAdjustmentPage from './pages/SalaryAdjustment';
 import HrImportPage from './pages/HrImportPage';
 import ClaimListPage from './pages/TravelExpenseClaim/ClaimListPage';
+import ProfilePage from './pages/ProfilePage';
 import ClaimFormPage from './pages/TravelExpenseClaim/ClaimFormPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import DashboardLayout from './components/layout/DashboardLayout';
@@ -130,6 +131,18 @@ function App() {
             <ProtectedRoute allowedRoles={['admin', 'finance']}>
               <DashboardLayout title="แก้ไขใบเบิกค่าใช้จ่าย">
                 <ClaimFormPage mode="edit" />
+              </DashboardLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        {/* โปรไฟล์ของฉัน — เปิดให้ทุก role ที่ login แล้ว */}
+        <Route
+          path="/profile"
+          element={
+            <ProtectedRoute allowedRoles={['admin', 'hr', 'finance']}>
+              <DashboardLayout title="โปรไฟล์ของฉัน">
+                <ProfilePage />
               </DashboardLayout>
             </ProtectedRoute>
           }

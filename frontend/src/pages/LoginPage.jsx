@@ -17,19 +17,9 @@ const LoginPage = () => {
       const user = result.data.user;
       toast.success(`ยินดีต้อนรับ ${user.name}!`);
 
+      // ทุก role เข้าหน้า Dashboard (รายชื่อบุคลากร) — finance ดูได้แบบ read-only
       setTimeout(() => {
-        switch (user.role) {
-          // admin/hr เข้าหน้า Dashboard (บริหารงานบุคคล / รายชื่อบุคลากร)
-          case 'admin':
-          case 'hr':
-            navigate('/dashboard');
-            break;
-          case 'finance':
-            navigate('/finance/import');
-            break;
-          default:
-            navigate('/');
-        }
+        navigate('/dashboard');
       }, 500);
     } else {
       toast.error(result.error);

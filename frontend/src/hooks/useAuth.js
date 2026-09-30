@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import api from '../services/api';
 
 const useAuth = () => {
@@ -14,6 +14,15 @@ const useAuth = () => {
       return null;
     }
   });
+
+  // อัปเดต state ทันทีเมื่อมีการแก้ไขโปรไฟล์จากหน้าอื่น (เช่น หน้า "โปรไฟล์ของฉัน")
+  useEffect(() => {
+    const handleUserUpdated = (event) => {
+      if (event.detail) setUser(event.detail);
+    };
+    window.addEventListener('user-updated', handleUserUpdated);
+    return () => window.removeEventListener('user-updated', handleUserUpdated);
+  }, []);
 
   const login = async (username, password) => {
     setLoading(true);

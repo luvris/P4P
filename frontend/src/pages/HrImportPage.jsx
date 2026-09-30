@@ -6,6 +6,52 @@ import DutyAssignmentImportPanel from '../components/features/import/DutyAssignm
 import { hrImportService } from '../services/hrImportService';
 
 /**
+ * ป้ายชื่อชุดข้อมูลที่ผูกกับเลขแถว
+ */
+const TYPE_LABELS = {
+    employee: 'ข้อมูลบุคลากร',
+    employment: 'ประวัติการจ้างงาน',
+};
+
+/**
+ * แปลงรายการปัญหาที่ backend ส่งมาให้เป็นรูปแบบเดียว
+ * รองรับทั้ง { row, error } / { row, message, type } และ string แบบเดิม
+ */
+const formatIssue = (issue) => {
+    if (typeof issue === 'string') {
+        return { row: null, type: null, message: issue };
+    }
+    if (!issue || typeof issue !== 'object') {
+        return { row: null, type: null, message: '' };
+    }
+    return {
+        row: issue.row ?? null,
+        type: issue.type ?? null,
+        message: issue.error ?? issue.message ?? '',
+    };
+};
+
+/**
+ * หนึ่งบรรทัดของรายการแจ้งเตือน/ข้อผิดพลาด
+ */
+const IssueLine = ({ issue, className }) => {
+    const { row, type, message } = formatIssue(issue);
+    const typeLabel = TYPE_LABELS[type] || type;
+
+    return (
+        <div className={className}>
+            {row !== null && (
+                <span className="font-medium">
+                    แถวที่ {row}
+                    {typeLabel ? ` (${typeLabel})` : ''}:{' '}
+                </span>
+            )}
+            {message || 'ไม่ระบุรายละเอียด'}
+        </div>
+    );
+};
+
+/**
  * ส่วนนำเข้า "ข้อมูลบุคลากร" (ของเดิม — flow และ service ไม่เปลี่ยน)
  */
 const HrEmployeeImportSection = () => {
@@ -135,9 +181,7 @@ const HrEmployeeImportSection = () => {
                             </h3>
                             <div className="max-h-48 overflow-y-auto space-y-1">
                                 {rowErrors.map((err, i) => (
-                                    <div key={i} className="text-sm text-red-600">
-                                        แถวที่ {err.row}: {err.error}
-                                    </div>
+                                    <IssueLine key={i} issue={err} className="text-sm text-red-600" />
                                 ))}
                             </div>
                         </div>
@@ -196,9 +240,7 @@ const HrEmployeeImportSection = () => {
                                     </div>
                                     <div className="max-h-40 overflow-y-auto space-y-1">
                                         {preview.warnings.map((w, i) => (
-                                            <div key={i} className="text-sm text-yellow-700">
-                                                แถวที่ {w.row}: {w.message}
-                                            </div>
+                                            <IssueLine key={i} issue={w} className="text-sm text-yellow-700" />
                                         ))}
                                     </div>
                                 </div>
