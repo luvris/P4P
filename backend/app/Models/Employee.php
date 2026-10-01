@@ -152,11 +152,21 @@ class Employee extends Model
     }
 
     /**
-     * ดึงเลขที่บัญชีจาก payrolls ล่าสุด
+     * เลขที่บัญชีที่ใช้แสดงผล
+     *
+     * ใช้ค่าจาก payrolls ล่าสุดก่อน (ข้อมูลที่นำเข้าจากการเงิน)
+     * ถ้าไม่มี payroll หรือยังว่าง ให้ใช้ค่าที่บันทึกไว้บนตาราง employees แทน
+     * (คนที่ไม่มีข้อมูล payroll เช่น เลขบัตรประชาชนไม่ตรง จะได้ไม่ขึ้น "-")
      */
     public function getBankAccountNumberAttribute(): ?string
     {
-        return $this->latestPayroll?->bank_account;
+        $fromPayroll = $this->latestPayroll?->bank_account;
+
+        if ($fromPayroll !== null && $fromPayroll !== '') {
+            return $fromPayroll;
+        }
+
+        return $this->bank_account !== '' ? $this->bank_account : null;
     }
 
     // ========== Scopes ==========

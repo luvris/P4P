@@ -1,5 +1,43 @@
 import { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Inbox } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Inbox, AlertTriangle } from 'lucide-react';
+
+/** normalize เลขที่บัญชีไว้เทียบกัน (ตัดช่องว่าง/ขีด) */
+const normalizeAccount = (value) => String(value ?? '').replace(/[\s-]/g, '');
+
+/**
+ * เลขที่บัญชีในตาราง
+ *
+ * ปกติใช้ค่าที่ backend resolve ให้แล้ว (payroll ก่อน แล้วค่อยค่าที่บันทึกไว้บนตัวบุคลากร)
+ * แต่ถ้าสองแหล่งไม่ตรงกัน จะแสดงทั้งคู่พร้อมป้ายเตือน ให้ผู้ใช้เห็นความขัดแย้งเอง
+ */
+const BankAccountCell = ({ employee }) => {
+    const own = String(employee?.bank_account ?? '').trim();
+    const payroll = String(employee?.latest_payroll?.bank_account ?? '').trim();
+
+    const conflict =
+        own !== '' && payroll !== '' && normalizeAccount(own) !== normalizeAccount(payroll);
+
+    if (conflict) {
+        return (
+            <span className="block">
+                <span className="block text-amber-700" title="ค่าที่บันทึกไว้บนข้อมูลบุคลากร">
+                    {own}
+                </span>
+                <span
+                    className="mt-0.5 flex items-center gap-1 font-sans text-[10px] text-amber-700"
+                    title="ค่าที่มาจากไฟล์ payroll ล่าสุด"
+                >
+                    <AlertTriangle className="h-3 w-3 shrink-0" />
+                    payroll: {payroll}
+                </span>
+            </span>
+        );
+    }
+
+    return (
+        employee?.bank_account_number || <span className="text-gray-400 font-sans">-</span>
+    );
+};
 
 /**
  * Mapping สีของ status badge ตามค่า `color` จาก backend
@@ -151,9 +189,7 @@ const EmployeeTable = ({
                                         {emp.duty?.name || '-'}
                                     </td>
                                     <td className="px-4 py-3 text-gray-700 font-mono text-xs">
-                                        {emp.latest_payroll?.bank_account || (
-                                            <span className="text-gray-400 font-sans">-</span>
-                                        )}
+                                        <BankAccountCell employee={emp} />
                                     </td>
                                     <td className="px-4 py-3">
                                         {emp.status ? (
