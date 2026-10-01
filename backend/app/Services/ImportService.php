@@ -33,8 +33,9 @@ class ImportService
      * ประมวลผลการอัปโหลดไฟล์
      *
      * @param  object|null  $parser  ส่ง parser ที่ parse ไปแล้วรอบหนึ่งได้ เพื่อไม่ต้องอ่านไฟล์ซ้ำ
+     * @param  array|null  $period  งวดของข้อมูล { fiscal_year, period_month, period_year }
      */
-    public function process(string $filePath, string $fileName, int $userId, ?object $parser = null): Import
+    public function process(string $filePath, string $fileName, int $userId, ?object $parser = null, ?array $period = null): Import
     {
         $extension = pathinfo($fileName, PATHINFO_EXTENSION);
 
@@ -45,6 +46,9 @@ class ImportService
             'file_type' => strtolower($extension),
             'uploaded_by' => $userId,
             'status' => 'processing',
+            'fiscal_year' => $period['fiscal_year'] ?? null,
+            'period_month' => $period['period_month'] ?? null,
+            'period_year' => $period['period_year'] ?? null,
         ]);
 
         try {

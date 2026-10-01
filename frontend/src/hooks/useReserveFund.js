@@ -1,59 +1,42 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { reserveFundService } from '../services/reserveFundService';
 import useFiscalYear from './useFiscalYear';
-import { currentMonth } from '../utils/fiscalPeriod';
 
+/**
+ * เงินสำรองรายปี — 1 ปีงบประมาณ = 1 ผลลัพธ์
+ *
+ * โหลดสรุปของปีงบที่เลือกจาก Header, คำนวณตามเปอร์เซ็นต์ที่กรอก,
+ * บันทึกร่าง และยืนยัน/ยกเลิกการยืนยันยอดรายปี
+ */
 const useReserveFund = () => {
-    // ปีงบประมาณมาจากตัวเลือกบน Header (ใช้ร่วมกันทั้งแอป)
     const { fiscalYear, refreshFiscalYears } = useFiscalYear();
 
-    const [imports, setImports] = useState([]);
-    const [importId, setImportId] = useState('');
     // ไม่มีค่าเริ่มต้น — ผู้ใช้ต้องกรอกเปอร์เซ็นต์เอง
     const [percent, setPercent] = useState('');
-    // งวด payroll ที่กำลังทำงานอยู่ (1-12) เริ่มที่เดือนปัจจุบัน
-    const [periodMonth, setPeriodMonth] = useState(currentMonth);
-    const [accumulated, setAccumulated] = useState(null);
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
 
     // เก็บค่าล่าสุดไว้ใช้ตอน refetch โดยไม่ต้องผูก dependency
-    const stateRef = useRef({ importId: '', percent: '', fiscalYear, periodMonth: currentMonth() });
+    const stateRef = useRef({ percent: '', fiscalYear });
     useEffect(() => {
-        stateRef.current = { importId, percent, fiscalYear, periodMonth };
-    }, [importId, percent, fiscalYear, periodMonth]);
+        stateRef.current = { percent, fiscalYear };
+    }, [percent, fiscalYear]);
 
-    const fetchImports = useCallback(async () => {
-        try {
-            const response = await reserveFundService.getImports();
-            setImports(response.data || []);
-            return response.data || [];
-        } catch (err) {
-            console.error('Failed to fetch imports:', err);
-            return [];
-        }
-    }, []);
-
-    const fetchSummary = useCallback(async (selectedImportId = '', selectedPercent = '', selectedFiscalYear = null, selectedPeriodMonth = null) => {
+    const fetchSummary = useCallback(async (selectedPercent = undefined, selectedFiscalYear = null) => {
         setLoading(true);
         setError('');
         try {
-            const params = {};
-            if (selectedImportId) params.import_id = selectedImportId;
-            if (selectedPercent !== '' && selectedPercent !== null && selectedPercent !== undefined) {
-                params.percent = selectedPercent;
-            }
+            const pct = selectedPercent ?? stateRef.current.percent;
             const year = selectedFiscalYear ?? stateRef.current.fiscalYear;
+
+            const params = {};
+            if (pct !== '' && pct !== null && pct !== undefined) params.percent = pct;
             if (year) params.fiscal_year = year;
 
-            const month = selectedPeriodMonth ?? stateRef.current.periodMonth;
-            if (month) params.period_month = month;
-
-            const response = await reserveFundService.getSummary(params);
+            const response = await reserveFundService.getAnnual(params);
             setData(response);
-            setAccumulated(response.accumulated || null);
             return { success: true, data: response };
         } catch (err) {
             let message = 'ไม่สามารถโหลดข้อมูลเงินสำรองได้';
@@ -72,16 +55,14 @@ const useReserveFund = () => {
     }, []);
 
     /**
-     * โหลดสรุปของปีงบ + งวด + ชุดข้อมูลที่เลือก
-     * ถ้างวดนั้นมีผลการคำนวณบันทึกไว้ ให้ดึงเปอร์เซ็นต์ที่บันทึกมาแสดงผลด้วย
-     * (ไม่ใช่ default percentage — เป็นค่าที่ผู้ใช้เคยกรอกและกดบันทึกไว้เอง)
-     * ถ้างวดนั้นยังไม่มีผลบันทึก จะคงเปอร์เซ็นต์ที่ผู้ใช้กรอกอยู่ไว้
+     * โหลดสรุปของปีงบ — ถ้าปีนั้นมีผลบันทึกไว้แล้ว ใช้เปอร์เซ็นต์ที่บันทึกมาแสดง
+     * (ไม่ใช่ค่า default — เป็นค่าที่ผู้ใช้เคยกรอกและกดบันทึกไว้เอง)
      */
-    const loadSummary = useCallback(async (selectedImportId, selectedFiscalYear, selectedPeriodMonth = null) => {
+    const loadSummary = useCallback(async (selectedFiscalYear = null) => {
         const currentPercent = stateRef.current.percent;
-        const month = selectedPeriodMonth ?? stateRef.current.periodMonth;
+        const year = selectedFiscalYear ?? stateRef.current.fiscalYear;
 
-        const first = await fetchSummary(selectedImportId, currentPercent, selectedFiscalYear, month);
+        const first = await fetchSummary(currentPercent, year);
         if (!first.success) return first;
 
         const savedPercent = first.data?.summary?.saved?.percent;
@@ -89,87 +70,53 @@ const useReserveFund = () => {
         if (Number(currentPercent) === Number(savedPercent)) return first;
 
         setPercent(String(savedPercent));
-        return fetchSummary(selectedImportId, savedPercent, selectedFiscalYear, month);
+        return fetchSummary(savedPercent, year);
     }, [fetchSummary]);
 
+    // โหลดครั้งแรก
     useEffect(() => {
-        (async () => {
-            const list = await fetchImports();
-            const latest = list.length > 0 ? list[0].id : '';
-            if (latest) setImportId(latest);
-            await loadSummary(latest, stateRef.current.fiscalYear);
-        })();
-    }, [fetchImports, loadSummary]);
+        loadSummary(stateRef.current.fiscalYear);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
-    const handleImportChange = useCallback((id) => {
-        setImportId(id);
-        loadSummary(id, stateRef.current.fiscalYear);
-    }, [loadSummary]);
-
-    /**
-     * เปลี่ยนงวด payroll — โหลดผลการคำนวณที่บันทึกไว้ของงวดนั้น
-     */
-    const handlePeriodMonthChange = useCallback((month) => {
-        const numeric = Number(month);
-        if (!Number.isInteger(numeric) || numeric < 1 || numeric > 12) return;
-        setPeriodMonth(numeric);
-        loadSummary(stateRef.current.importId, stateRef.current.fiscalYear, numeric);
-    }, [loadSummary]);
-
-    /**
-     * เปลี่ยนปีงบประมาณจาก Header — โหลดผลการคำนวณที่บันทึกไว้ของปีนั้น
-     * (ข้ามปีที่โหลดไปแล้ว เพื่อไม่ยิงซ้ำตอน mount)
-     */
+    // เปลี่ยนปีงบประมาณจาก Header — โหลดผลของปีนั้น (ข้ามปีที่โหลดไปแล้วตอน mount)
     const loadedYearRef = useRef(fiscalYear);
     useEffect(() => {
         if (loadedYearRef.current === fiscalYear) return;
         loadedYearRef.current = fiscalYear;
-        loadSummary(stateRef.current.importId, fiscalYear);
+        loadSummary(fiscalYear);
     }, [fiscalYear, loadSummary]);
 
     /**
-     * คำนวณใหม่ด้วยเปอร์เซ็นต์ที่กรอก
-     * ค่าว่างหรือนอกช่วง 0-100 จะไม่ยิง request
+     * คำนวณใหม่ด้วยเปอร์เซ็นต์ที่กรอก — ค่าว่าง/นอกช่วง 0-100 ไม่ยิง request
      */
     const applyPercent = useCallback((value) => {
         const numeric = Number(value);
         if (value === '' || Number.isNaN(numeric) || numeric < 0 || numeric > 100) {
             return;
         }
-        fetchSummary(stateRef.current.importId, numeric);
+        fetchSummary(numeric);
     }, [fetchSummary]);
 
     /**
-     * บันทึกผลการคำนวณของงวด payroll ภายใต้ปีงบประมาณ (สถานะ draft)
+     * บันทึกผลการคำนวณรายปี (สถานะ draft)
      */
-    const saveCalculation = useCallback(async ({ fiscalYear: overrideYear, note } = {}) => {
-        const {
-            importId: currentImportId,
-            percent: currentPercent,
-            fiscalYear: currentFiscal,
-            periodMonth: currentPeriod,
-        } = stateRef.current;
+    const saveCalculation = useCallback(async ({ note } = {}) => {
+        const { percent: currentPercent, fiscalYear: currentFiscal } = stateRef.current;
         const numeric = Number(currentPercent);
 
         if (currentPercent === '' || Number.isNaN(numeric)) {
             return { success: false, error: 'กรุณาระบุเปอร์เซ็นต์ก่อนบันทึก' };
         }
 
-        const targetYear = overrideYear || currentFiscal;
-
         setSaving(true);
         try {
-            const payload = { percent: numeric, period_month: currentPeriod };
-            if (currentImportId) payload.import_id = currentImportId;
-            if (targetYear) payload.fiscal_year = targetYear;
+            const payload = { percent: numeric, fiscal_year: currentFiscal };
             if (note) payload.note = note;
 
-            const response = await reserveFundService.saveCalculation(payload);
+            const response = await reserveFundService.saveAnnual(payload);
 
-            // โหลดสรุปใหม่เพื่อให้สถานะ "บันทึกแล้ว" อัปเดต
-            await fetchSummary(currentImportId, numeric, targetYear, currentPeriod);
-
-            // ปีงบที่เพิ่งบันทึกต้องปรากฏใน dropdown บน Header
+            await fetchSummary(numeric, currentFiscal);
             await refreshFiscalYears();
 
             return { success: true, data: response.data, message: response.message };
@@ -187,11 +134,11 @@ const useReserveFund = () => {
     }, [fetchSummary, refreshFiscalYears]);
 
     /**
-     * ยืนยัน / ยกเลิกการยืนยันงวด — ยอดสะสมนับเฉพาะงวดที่ยืนยันแล้ว
+     * ยืนยัน / ยกเลิกการยืนยันยอดรายปี
      */
-    const setPeriodConfirmation = useCallback(async (calculationId, confirmed) => {
+    const setAnnualConfirmation = useCallback(async (calculationId, confirmed) => {
         if (!calculationId) {
-            return { success: false, error: 'กรุณาบันทึกผลการคำนวณของงวดนี้ก่อน' };
+            return { success: false, error: 'กรุณาบันทึกผลการคำนวณของปีนี้ก่อน' };
         }
 
         setSaving(true);
@@ -200,12 +147,11 @@ const useReserveFund = () => {
                 ? await reserveFundService.confirmCalculation(calculationId)
                 : await reserveFundService.unconfirmCalculation(calculationId);
 
-            const { importId: id, percent: pct, fiscalYear: year, periodMonth: month } = stateRef.current;
-            await fetchSummary(id, pct, year, month);
+            await fetchSummary();
 
             return { success: true, data: response.data, message: response.message };
         } catch (err) {
-            let message = confirmed ? 'ไม่สามารถยืนยันงวดนี้ได้' : 'ไม่สามารถยกเลิกการยืนยันได้';
+            let message = confirmed ? 'ไม่สามารถยืนยันรายปีได้' : 'ไม่สามารถยกเลิกการยืนยันได้';
             if (err.response) {
                 message = err.response.data?.message || `เกิดข้อผิดพลาด (${err.response.status})`;
             } else if (err.request) {
@@ -218,28 +164,19 @@ const useReserveFund = () => {
     }, [fetchSummary]);
 
     return {
-        imports,
-        importId,
+        fiscalYear,
         percent,
         setPercent,
         applyPercent,
-        fiscalYear,
-        periodMonth,
-        handlePeriodMonthChange,
-        accumulated,
         data,
+        summary: data?.summary || null,
+        duties: data?.data?.duties || [],
         loading,
         saving,
         error,
-        handleImportChange,
         saveCalculation,
-        setPeriodConfirmation,
-        refetch: () => fetchSummary(
-            stateRef.current.importId,
-            stateRef.current.percent,
-            stateRef.current.fiscalYear,
-            stateRef.current.periodMonth,
-        ),
+        setAnnualConfirmation,
+        refetch: () => fetchSummary(),
     };
 };
 

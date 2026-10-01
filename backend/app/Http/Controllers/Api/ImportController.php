@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Import;
 use App\Models\Payroll;
+use App\Models\ReserveFundCalculation;
 use App\Services\ImportService;
 use App\Services\Parsers\XlsxParser;
 use Illuminate\Http\Request;
@@ -23,11 +24,31 @@ class ImportController extends Controller
     {
         $request->validate([
             'file' => 'required|file|mimes:xlsx,xls,txt|max:10240',
+            'fiscal_year' => 'nullable|integer|min:2500|max:2700',
+            'period_month' => 'nullable|integer|min:1|max:12',
         ], [
             'file.required' => 'กรุณาเลือกไฟล์',
             'file.mimes' => 'รองรับเฉพาะไฟล์ .xlsx, .xls, .txt',
             'file.max' => 'ขนาดไฟล์ต้องไม่เกิน 10 MB',
+            'fiscal_year.integer' => 'ปีงบประมาณต้องเป็นตัวเลข',
+            'period_month.min' => 'งวดเดือนต้องอยู่ระหว่าง 1-12',
+            'period_month.max' => 'งวดเดือนต้องอยู่ระหว่าง 1-12',
         ]);
+
+        // งวดของไฟล์ — ถ้าระบุเดือนมา จะอนุมานปีงบ/ปีปฏิทินให้เอง
+        $period = null;
+        if ($request->filled('period_month')) {
+            $periodMonth = (int) $request->input('period_month');
+            $fiscalYear = $request->filled('fiscal_year')
+                ? (int) $request->input('fiscal_year')
+                : ReserveFundCalculation::currentFiscalYear();
+
+            $period = [
+                'fiscal_year'  => $fiscalYear,
+                'period_month' => $periodMonth,
+                'period_year'  => ReserveFundCalculation::calendarYearOf($fiscalYear, $periodMonth),
+            ];
+        }
 
         $file = $request->file('file');
         $originalName = $file->getClientOriginalName();
@@ -46,7 +67,8 @@ class ImportController extends Controller
             $fullPath,
             $originalName,
             $request->user()->id,
-            $parser
+            $parser,
+            $period
         );
 
         // คอลัมน์รายรับที่หาไม่เจอในไฟล์ — ค่านั้นจะถูกบันทึกเป็น 0

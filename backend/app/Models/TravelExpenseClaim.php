@@ -17,16 +17,25 @@ class TravelExpenseClaim extends Model
     public const STATUS_CANCELLED = 'cancelled';
 
     /** ประเภทค่าใช้จ่ายเริ่มต้นตามแบบฟอร์มอ้างอิง */
-    public const DEFAULT_CATEGORY = 'ค่าเบี้ยเลี้ยง ค่าที่พัก ค่าพาหนะ ภายในประเทศ';
+    public const DEFAULT_CATEGORY = 'เดินทางไปราชการ';
 
-    public const CATEGORY_DOMESTIC = 'ค่าเบี้ยเลี้ยง ค่าที่พัก ค่าพาหนะ ภายในประเทศ';
-    public const CATEGORY_OVERSEAS = 'ค่าเบี้ยเลี้ยง ค่าที่พัก ค่าพาหนะ ต่างประเทศ';
+    public const CATEGORY_TRAVEL = 'เดินทางไปราชการ';
+    public const CATEGORY_TRAINING = 'เดินทางไปราชการโดยฝึกอบรม';
 
     /** ประเภทค่าใช้จ่ายที่เลือกได้ (dropdown) */
     public const CATEGORIES = [
-        self::CATEGORY_DOMESTIC,
-        self::CATEGORY_OVERSEAS,
+        self::CATEGORY_TRAVEL,
+        self::CATEGORY_TRAINING,
     ];
+
+    /**
+     * ข้อความประเภทค่าใช้จ่ายที่จะพิมพ์ลงแบบฟอร์ม Excel
+     *
+     * ชื่อที่โชว์ในแอปกับข้อความบนแบบฟอร์มไม่เหมือนกัน —
+     * แบบฟอร์มราชการต้องใช้ข้อความเต็มตามต้นฉบับ และใช้ข้อความนี้
+     * เหมือนกันทุกประเภท (ทั้ง เดินทางไปราชการ และ เดินทางไปราชการโดยฝึกอบรม)
+     */
+    public const EXCEL_CATEGORY_LABEL = 'ค่าเบี้ยเลี้ยง ค่าที่พัก ค่าพาหนะ ภายในประเทศ';
 
     protected $fillable = [
         'document_no',

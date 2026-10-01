@@ -24,7 +24,7 @@ class StoreTravelExpenseClaimRequest extends FormRequest
         return [
             'fiscal_year'       => ['required', 'integer', 'min:' . ThaiFiscalYear::MIN, 'max:' . ThaiFiscalYear::MAX],
             'claim_period'      => ['required', 'date'],
-            // เลือกได้เฉพาะประเภทที่ระบบกำหนด (ภายในประเทศ / ต่างประเทศ)
+            // เลือกได้เฉพาะประเภทที่ระบบกำหนด (เดินทางไปราชการ / เดินทางไปราชการโดยฝึกอบรม)
             'expense_category'  => ['required', 'string', Rule::in(TravelExpenseClaim::CATEGORIES)],
             'organization_name' => ['nullable', 'string', 'max:255'],
             'note'              => ['nullable', 'string', 'max:2000'],
@@ -85,7 +85,7 @@ class StoreTravelExpenseClaimRequest extends FormRequest
             'claim_period.required'     => 'กรุณาเลือกเดือนที่เบิก',
             'claim_period.date'         => 'รูปแบบเดือนที่เบิกไม่ถูกต้อง',
             'expense_category.required' => 'กรุณาเลือกประเภทค่าใช้จ่าย',
-            'expense_category.in'       => 'ประเภทค่าใช้จ่ายต้องเป็นภายในประเทศ หรือต่างประเทศ',
+            'expense_category.in'       => 'ประเภทค่าใช้จ่ายต้องเป็น "เดินทางไปราชการ" หรือ "เดินทางไปราชการโดยฝึกอบรม"',
             'items.*.first_name.required' => 'กรุณาระบุชื่อผู้เบิก',
             'items.*.last_name.required'  => 'กรุณาระบุนามสกุลผู้เบิก',
             'items.*.allowance_amount.numeric'      => 'ค่าเบี้ยเลี้ยงต้องเป็นตัวเลข',

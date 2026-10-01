@@ -45,7 +45,7 @@ class TravelExpenseFormulaInjectionTest extends TestCase
             ->postJson('/api/finance/travel-expense-claims', [
                 'fiscal_year'      => 2569,
                 'claim_period'     => '2026-06-01',
-                'expense_category' => TravelExpenseClaim::CATEGORY_DOMESTIC,
+                'expense_category' => TravelExpenseClaim::CATEGORY_TRAVEL,
                 'status'           => 'confirmed',
                 'items'            => [[
                     'first_name'       => self::PAYLOAD,

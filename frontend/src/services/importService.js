@@ -3,10 +3,14 @@ import api from './api';
 export const importService = {
   /**
    * อัปโหลดไฟล์
+   * @param {File} file
+   * @param {{fiscal_year?: number, period_month?: number}} [period] งวดของไฟล์ payroll
    */
-  uploadFile: async (file) => {
+  uploadFile: async (file, period = {}) => {
     const formData = new FormData();
     formData.append('file', file);
+    if (period?.period_month) formData.append('period_month', period.period_month);
+    if (period?.fiscal_year) formData.append('fiscal_year', period.fiscal_year);
 
     const response = await api.post('/finance/imports', formData, {
       headers: {

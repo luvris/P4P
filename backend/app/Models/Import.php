@@ -19,6 +19,9 @@ class Import extends Model
      */
     protected $fillable = [
         'import_type',
+        'fiscal_year',
+        'period_month',
+        'period_year',
         'file_name',
         'file_path',
         'file_type',
@@ -46,6 +49,9 @@ class Import extends Model
         'updated_rows' => 'integer',
         'skipped_rows' => 'integer',
         'row_errors' => 'array',
+        'fiscal_year' => 'integer',
+        'period_month' => 'integer',
+        'period_year' => 'integer',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];

@@ -9,10 +9,10 @@ import {
     AlertTriangle,
     Percent,
     Save,
+    CalendarCheck,
     CalendarClock,
     CheckCircle2,
     RotateCcw,
-    PiggyBank,
 } from 'lucide-react';
 import {
     ResponsiveContainer,
@@ -28,8 +28,6 @@ import {
     Legend,
 } from 'recharts';
 import useReserveFund from '../../hooks/useReserveFund';
-import useFiscalYear from '../../hooks/useFiscalYear';
-import { FISCAL_MONTHS, MONTH_LABELS, calendarYearOf } from '../../utils/fiscalPeriod';
 
 const formatMoney = (value) =>
     new Intl.NumberFormat('th-TH', {
@@ -101,50 +99,73 @@ const ChartTooltip = ({ active, payload, label }) => {
     );
 };
 
+/**
+ * รวมยอดตามระดับที่เลือก (ภารกิจ / กลุ่มงาน / งาน) จากโครง duties → works
+ */
+const aggregateBy = (duties, level) => {
+    if (level === 'duty') {
+        return duties.map((duty) => ({
+            name: duty.name,
+            income_base: Number(duty.income_base) || 0,
+            reserve: Number(duty.reserve_amount) || 0,
+        }));
+    }
+
+    const map = new Map();
+    duties.forEach((duty) => {
+        (duty.works || []).forEach((work) => {
+            const name =
+                level === 'group'
+                    ? work.group_name || 'ไม่ระบุกลุ่มงาน'
+                    : work.name || 'ไม่ระบุงาน';
+
+            if (!map.has(name)) {
+                map.set(name, { name, income_base: 0, reserve: 0 });
+            }
+            const item = map.get(name);
+            item.income_base += Number(work.income_base) || 0;
+            item.reserve += Number(work.reserve_amount) || 0;
+        });
+    });
+
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name, 'th'));
+};
+
 const ReserveFundPage = () => {
     const {
-        imports,
-        importId,
+        fiscalYear,
         percent,
         setPercent,
         applyPercent,
-        fiscalYear,
-        periodMonth,
-        handlePeriodMonthChange,
-        accumulated,
-        data,
+        summary,
+        duties,
         loading,
         saving,
         error,
-        handleImportChange,
         saveCalculation,
-        setPeriodConfirmation,
+        setAnnualConfirmation,
     } = useReserveFund();
 
-    const { fiscalYearOptions } = useFiscalYear();
-    const hasSavedYears = fiscalYearOptions.length > 0;
-
     const [saveNote, setSaveNote] = useState('');
-    // ผูกข้อความสถานะกับปีงบ + งวดที่บันทึก เพื่อให้หายเองเมื่อสลับ
+    // ผูกข้อความสถานะกับปีงบที่บันทึก เพื่อให้หายเองเมื่อสลับปี
     const [saveStatus, setSaveStatus] = useState(null);
-    const activeStatus =
-        saveStatus?.fiscalYear === fiscalYear && saveStatus?.periodMonth === periodMonth
-            ? saveStatus
-            : null;
+    const activeStatus = saveStatus?.fiscalYear === fiscalYear ? saveStatus : null;
 
-    const duties = useMemo(() => data?.data?.duties || [], [data]);
-    const summary = data?.summary || null;
+    const months = useMemo(() => summary?.months || [], [summary]);
+    // งวดล่าสุดที่มีข้อมูล — ใช้เป็นภาพจำนวนบุคลากร ณ งวดล่าสุด (ไม่ใช่ผลรวมทุกงวด)
+    const lastMonthWithData = useMemo(
+        () => [...months].reverse().find((month) => month.has_data) || null,
+        [months],
+    );
+    const monthsPresent = summary?.months_present ?? 0;
     const savedInfo = summary?.saved || null;
     const isConfirmed = savedInfo?.status === 'confirmed';
 
     const reportStatus = (result, fallbackError) =>
         setSaveStatus({
             fiscalYear,
-            periodMonth,
             type: result.success ? 'success' : 'error',
-            message: result.success
-                ? result.message || 'ดำเนินการสำเร็จ'
-                : result.error || fallbackError,
+            message: result.success ? result.message || 'ดำเนินการสำเร็จ' : result.error || fallbackError,
         });
 
     const handleSave = async () => {
@@ -155,75 +176,65 @@ const ReserveFundPage = () => {
 
     const handleToggleConfirm = async () => {
         setSaveStatus(null);
-        const result = await setPeriodConfirmation(savedInfo?.id, !isConfirmed);
+        const result = await setAnnualConfirmation(savedInfo?.id, !isConfirmed);
         reportStatus(result, 'ไม่สามารถเปลี่ยนสถานะการยืนยันได้');
     };
 
-
-    // เปอร์เซ็นต์ที่ใช้คำนวณผลลัพธ์ชุดที่แสดงอยู่ (มาจาก backend)
-    const appliedPercent = summary?.percent ?? percent;
-    const percentLabel = formatPercent(appliedPercent);
+    const appliedPercent = summary?.percent ?? (percent === '' ? null : Number(percent));
+    const percentLabel = appliedPercent === null ? '-' : formatPercent(appliedPercent);
 
     const [groupBy, setGroupBy] = useState('duty');
-
-    const chartData = useMemo(() => {
-        if (groupBy === 'duty') {
-            return duties.map((duty) => ({
-                id: duty.id,
-                name: duty.name,
-                income_base: duty.income_base,
-                value: duty.reserve_amount,
-            }));
-        }
-
-        const map = new Map();
-        duties.forEach((duty) => {
-            duty.works.forEach((work) => {
-                const key =
-                    groupBy === 'group'
-                        ? `group:${work.group_id ?? work.group_name}`
-                        : `work:${work.id ?? work.name}`;
-                const name =
-                    groupBy === 'group'
-                        ? work.group_name || 'ไม่ระบุกลุ่มงาน'
-                        : work.name || 'ไม่ระบุงาน';
-
-                if (!map.has(key)) {
-                    map.set(key, { id: key, name, income_base: 0, value: 0 });
-                }
-                const item = map.get(key);
-                item.income_base += work.income_base;
-                item.value += work.reserve_amount;
-            });
-        });
-
-        return Array.from(map.values()).sort((a, b) =>
-            a.name.localeCompare(b.name, 'th'),
-        );
-    }, [duties, groupBy]);
-
-    const unassignedCount = useMemo(() => {
-        const duty = duties.find((d) => d.id == null);
-        return duty ? duty.employee_count : 0;
-    }, [duties]);
+    const chartData = useMemo(() => aggregateBy(duties, groupBy), [duties, groupBy]);
 
     const exportCsv = () => {
         const incomeHeader = 'ฐานรายรับ (บาท)';
         const reserveHeader = `เงินสำรอง ${percentLabel}% (บาท)`;
 
         const rows = [
-            [`ปีงบประมาณ ${fiscalYear}`, `งวด ${MONTH_LABELS[periodMonth]} ${calendarYearOf(fiscalYear, periodMonth)}`, '', '', '', ''],
-            ['ภารกิจ', 'กลุ่มงาน', 'งาน', incomeHeader, reserveHeader, 'จำนวน (คน)'],
+            [
+                `ปีงบประมาณ ${fiscalYear}`,
+                `ต.ค. ${fiscalYear - 1} – ก.ย. ${fiscalYear}`,
+                `ข้อมูล ${monthsPresent}/12 งวด`,
+                '',
+                '',
+                '',
+            ],
+            ['งวด', 'ชุดข้อมูล', 'ฐานรายรับ (บาท)', 'เงินสำรอง (บาท)', 'จำนวน (คน)', 'สถานะ'],
         ];
 
+        // รายงวด
+        months.forEach((month) => {
+            rows.push([
+                `${month.period_label} ${month.period_year}`,
+                month.import_name || '-',
+                month.has_data ? Number(month.income_base).toFixed(2) : '',
+                month.total_reserve != null ? Number(month.total_reserve).toFixed(2) : '',
+                month.has_data ? month.total_employees : '',
+                month.has_data ? 'มีข้อมูล' : 'ขาด',
+            ]);
+        });
+
+        rows.push([
+            'รวมทั้งปี',
+            '',
+            Number(summary?.total_income_base || 0).toFixed(2),
+            Number(summary?.total_reserve || 0).toFixed(2),
+            summary?.total_employees ?? '',
+            '',
+        ]);
+
+        // รายละเอียดตามภารกิจ/กลุ่มงาน/งาน
+        rows.push(['', '', '', '', '', '']);
+        rows.push(['ภารกิจ', 'กลุ่มงาน', 'งาน', incomeHeader, reserveHeader, 'จำนวน (คน)']);
+
         duties.forEach((duty) => {
-            duty.works.forEach((work) => {
+            (duty.works || []).forEach((work) => {
                 rows.push([
                     duty.name,
                     work.group_name,
                     work.name,
-                    work.income_base.toFixed(2),
-                    work.reserve_amount.toFixed(2),
+                    Number(work.income_base).toFixed(2),
+                    Number(work.reserve_amount ?? 0).toFixed(2),
                     work.employee_count,
                 ]);
             });
@@ -231,55 +242,15 @@ const ReserveFundPage = () => {
                 `รวมภารกิจ: ${duty.name}`,
                 '',
                 '',
-                duty.income_base.toFixed(2),
-                duty.reserve_amount.toFixed(2),
+                Number(duty.income_base).toFixed(2),
+                Number(duty.reserve_amount ?? 0).toFixed(2),
                 duty.employee_count,
             ]);
         });
 
-        if (summary) {
-            rows.push([
-                'รวมทั้งหมด',
-                '',
-                '',
-                summary.total_income_base.toFixed(2),
-                summary.total_reserve.toFixed(2),
-                summary.total_employees,
-            ]);
-        }
-
-        // ยอดสะสมของปีงบ (เฉพาะงวดที่ยืนยันแล้ว)
-        if (accumulated?.periods?.length > 0) {
-            rows.push(['', '', '', '', '', '']);
-            rows.push([`เงินสำรองสะสม ปีงบประมาณ ${fiscalYear} (งวดที่ยืนยันแล้ว)`, '', '', '', '', '']);
-            rows.push(['งวด', 'เปอร์เซ็นต์ (%)', '', incomeHeader, 'เงินสำรอง (บาท)', 'จำนวน (คน)']);
-
-            accumulated.periods.forEach((period) => {
-                rows.push([
-                    `${period.period_label} ${period.period_year}`,
-                    period.percent,
-                    '',
-                    period.total_income_base.toFixed(2),
-                    period.total_reserve.toFixed(2),
-                    period.total_employees,
-                ]);
-            });
-
-            rows.push([
-                'รวมสะสม',
-                '',
-                '',
-                accumulated.total_income_base.toFixed(2),
-                accumulated.total_reserve.toFixed(2),
-                '',
-            ]);
-        }
-
         const csv = rows
             .map((row) =>
-                row
-                    .map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`)
-                    .join(','),
+                row.map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(','),
             )
             .join('\r\n');
 
@@ -287,21 +258,21 @@ const ReserveFundPage = () => {
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = `reserve-fund-${fiscalYear}-m${periodMonth}-${percentLabel}percent-${importId || 'latest'}.csv`;
+        link.download = `reserve-fund-annual-${fiscalYear}-${percentLabel}percent.csv`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
     };
 
+    const hasData = (summary?.total_employees ?? 0) > 0;
+
     return (
         <div className="max-w-7xl mx-auto space-y-4">
             {/* Header */}
             <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between print:mb-2 print:gap-1">
                 <div>
-                    <h2 className="text-2xl font-bold text-[#8B5E3C] mb-1">
-                        คำนวณเงินสำรอง
-                    </h2>
+                    <h2 className="text-2xl font-bold text-[#8B5E3C] mb-1">คำนวณเงินสำรอง</h2>
                     <p className="text-gray-500 text-sm">
                         คำนวณจากฐานรายรับ = เงินเดือน + ล่วงเวลา (OT) + เงินประจำตำแหน่ง + เงิน P4P
                     </p>
@@ -311,7 +282,7 @@ const ReserveFundPage = () => {
                         type="button"
                         onClick={handleSave}
                         disabled={saving || loading || percent === '' || isConfirmed}
-                        title={isConfirmed ? 'งวดนี้ยืนยันแล้ว ต้องยกเลิกการยืนยันก่อนแก้ไข' : undefined}
+                        title={isConfirmed ? 'ยืนยันแล้ว ต้องยกเลิกการยืนยันก่อนแก้ไข' : undefined}
                         className="inline-flex items-center gap-2 rounded-lg border border-[#8B5E3C] px-3 py-2 text-sm font-medium text-[#8B5E3C] hover:bg-[#FBF7EE] disabled:opacity-50"
                     >
                         {saving ? (
@@ -325,7 +296,7 @@ const ReserveFundPage = () => {
                         type="button"
                         onClick={handleToggleConfirm}
                         disabled={saving || loading || !savedInfo}
-                        title={!savedInfo ? 'บันทึกผลการคำนวณของงวดนี้ก่อน' : undefined}
+                        title={!savedInfo ? 'บันทึกผลการคำนวณของปีนี้ก่อน' : undefined}
                         className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium disabled:opacity-50 ${
                             isConfirmed
                                 ? 'border border-gray-300 text-gray-600 hover:bg-gray-50'
@@ -337,7 +308,7 @@ const ReserveFundPage = () => {
                         ) : (
                             <CheckCircle2 className="w-4 h-4" />
                         )}
-                        {isConfirmed ? 'ยกเลิกการยืนยันงวด' : 'ยืนยันงวดนี้'}
+                        {isConfirmed ? 'ยกเลิกการยืนยันรายปี' : 'ยืนยันรายปี'}
                     </button>
                     <button
                         type="button"
@@ -350,37 +321,9 @@ const ReserveFundPage = () => {
                 </div>
             </div>
 
-            {/* Import selector + เปอร์เซ็นต์ที่ใช้คำนวณ + ปีงบประมาณที่บันทึก */}
+            {/* Control card */}
             <div className="rounded-xl border border-gray-200 bg-white p-4 print:hidden">
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                    <div>
-                        <label
-                            htmlFor="payroll-import"
-                            className="block text-sm font-medium text-gray-700 mb-2"
-                        >
-                            เลือกชุดข้อมูล Payroll (Import)
-                        </label>
-                        <select
-                            id="payroll-import"
-                            value={importId}
-                            onChange={(e) => handleImportChange(e.target.value)}
-                            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 focus:border-[#C5A059] focus:outline-none focus:ring-1 focus:ring-[#C5A059]"
-                        >
-                            <option value="">— เลือกชุดข้อมูล —</option>
-                            {imports.map((item) => (
-                                <option key={item.id} value={item.id}>
-                                    {item.file_name || `Import #${item.id}`} · {formatDate(item.created_at)}
-                                </option>
-                            ))}
-                        </select>
-
-                        {summary?.imported_at && (
-                            <p className="mt-2 text-xs text-gray-500">
-                                ข้อมูลล่าสุด: {formatDate(summary.imported_at)}
-                            </p>
-                        )}
-                    </div>
-
                     <div>
                         <label
                             htmlFor="reserve-percent"
@@ -408,7 +351,6 @@ const ReserveFundPage = () => {
                                     onChange={(e) => setPercent(e.target.value)}
                                     onBlur={() => applyPercent(percent)}
                                     className="w-full rounded-lg border border-gray-300 bg-white py-2 pl-9 pr-3 text-sm text-gray-700 focus:border-[#C5A059] focus:outline-none focus:ring-1 focus:ring-[#C5A059]"
-                                    aria-describedby="reserve-percent-help"
                                 />
                             </div>
                             <button
@@ -419,32 +361,8 @@ const ReserveFundPage = () => {
                                 คำนวณ
                             </button>
                         </form>
-                        <p id="reserve-percent-help" className="mt-2 text-xs text-gray-500">
-                            กรอกได้ตั้งแต่ 0–100 (รองรับทศนิยม) กำลังแสดงผลที่ {percentLabel}%
-                        </p>
-                    </div>
-
-                    <div>
-                        <label
-                            htmlFor="reserve-period-month"
-                            className="block text-sm font-medium text-gray-700 mb-2"
-                        >
-                            งวด Payroll (เดือน)
-                        </label>
-                        <select
-                            id="reserve-period-month"
-                            value={periodMonth}
-                            onChange={(e) => handlePeriodMonthChange(e.target.value)}
-                            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 focus:border-[#C5A059] focus:outline-none focus:ring-1 focus:ring-[#C5A059]"
-                        >
-                            {FISCAL_MONTHS.map((month) => (
-                                <option key={month} value={month}>
-                                    {MONTH_LABELS[month]} {calendarYearOf(fiscalYear, month)}
-                                </option>
-                            ))}
-                        </select>
                         <p className="mt-2 text-xs text-gray-500">
-                            ปีงบประมาณ {fiscalYear} = ต.ค. {fiscalYear - 1} ถึง ก.ย. {fiscalYear}
+                            กรอกได้ตั้งแต่ 0–100 (รองรับทศนิยม) กำลังแสดงผลที่ {percentLabel}%
                         </p>
                     </div>
 
@@ -459,9 +377,7 @@ const ReserveFundPage = () => {
                             <CalendarClock className="h-4 w-4 shrink-0 text-gray-400" />
                             <span className="font-medium">ปีงบประมาณ {fiscalYear}</span>
                             <span className="ml-auto text-xs text-gray-500">
-                                {hasSavedYears
-                                    ? 'เปลี่ยนได้ที่แถบด้านบน'
-                                    : 'บันทึกแล้วจะเลือกปีได้ที่แถบด้านบน'}
+                                ต.ค. {fiscalYear - 1} – ก.ย. {fiscalYear}
                             </span>
                         </div>
                         <input
@@ -473,11 +389,37 @@ const ReserveFundPage = () => {
                             placeholder="หมายเหตุ (ไม่บังคับ)"
                             className="mt-2 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 focus:border-[#C5A059] focus:outline-none focus:ring-1 focus:ring-[#C5A059]"
                         />
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                            สถานะผลการคำนวณรายปี
+                        </label>
+                        <div
+                            className={`rounded-lg border px-3 py-2 text-sm ${
+                                isConfirmed
+                                    ? 'border-green-200 bg-green-50 text-green-700'
+                                    : savedInfo
+                                        ? 'border-amber-200 bg-amber-50 text-amber-800'
+                                        : 'border-gray-200 bg-gray-50 text-gray-700'
+                            }`}
+                        >
+                            {savedInfo ? (
+                                <>
+                                    <p className="font-medium">
+                                        {isConfirmed ? 'ยืนยันแล้ว' : 'ร่าง (ยังไม่ยืนยัน)'}
+                                    </p>
+                                    <p className="mt-0.5 text-xs">
+                                        บันทึกไว้ที่ {formatPercent(savedInfo.percent)}% ·{' '}
+                                        {formatDate(savedInfo.saved_at)}
+                                    </p>
+                                </>
+                            ) : (
+                                'ยังไม่มีผลการคำนวณที่บันทึกไว้สำหรับปีงบนี้'
+                            )}
+                        </div>
                         <p className="mt-2 text-xs text-gray-500">
-                            {savedInfo
-                                ? `งวด ${savedInfo.period_label || '-'}: บันทึกไว้ที่ ${formatPercent(savedInfo.percent)}%`
-                                    + ` · ${isConfirmed ? 'ยืนยันแล้ว' : 'ร่าง (ยังไม่นับในยอดสะสม)'}`
-                                : 'ยังไม่มีผลการคำนวณที่บันทึกไว้สำหรับงวดนี้'}
+                            บันทึกร่างก่อน แล้วกด «ยืนยันรายปี» เพื่อล็อกยอดทางการ
                         </p>
                     </div>
                 </div>
@@ -502,107 +444,176 @@ const ReserveFundPage = () => {
                 </div>
             )}
 
-            {/* เงินสำรองสะสมของปีงบประมาณ — รวมเฉพาะงวดที่ยืนยันแล้ว */}
+            {/* ความครบของข้อมูลรายเดือน + ยอดรายปี */}
             <div className="rounded-xl border border-gray-200 bg-white p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="flex items-center gap-3">
                         <div className="rounded-lg p-2.5 bg-[#FBF7EE] text-[#8B5E3C] shrink-0">
-                            <PiggyBank className="w-5 h-5" />
+                            <CalendarCheck className="w-5 h-5" />
                         </div>
                         <div>
                             <p className="text-xs text-gray-500">
-                                เงินสำรองสะสม ปีงบประมาณ {fiscalYear}
+                                ข้อมูลรายเดือนของปีงบประมาณ {fiscalYear}
                             </p>
                             <p className="text-2xl font-semibold text-[#8B5E3C]">
-                                {formatMoney(accumulated?.total_reserve)} บาท
+                                {loading ? (
+                                    <span className="inline-block w-24 h-7 bg-gray-200 rounded animate-pulse" />
+                                ) : (
+                                    <>
+                                        {formatNumber(monthsPresent)}
+                                        <span className="text-base font-normal text-gray-500">
+                                            {' '}
+                                            / 12 งวด
+                                        </span>
+                                    </>
+                                )}
                             </p>
                         </div>
                     </div>
                     <div className="text-right text-xs text-gray-500">
                         <p>
-                            ยืนยันแล้ว{' '}
+                            ฐานรายรับสะสม{' '}
                             <span className="font-semibold text-gray-700">
-                                {formatNumber(accumulated?.confirmed_periods)}
-                            </span>
-                            {' / '}
-                            {formatNumber(accumulated?.total_periods ?? 12)} งวด
+                                {formatMoney(summary?.total_income_base)}
+                            </span>{' '}
+                            บาท
                         </p>
                         <p className="mt-1">
-                            ฐานรายรับสะสม {formatMoney(accumulated?.total_income_base)} บาท
+                            เงินสำรอง {percentLabel}%{' '}
+                            <span className="font-semibold text-gray-700">
+                                {formatMoney(summary?.total_reserve)}
+                            </span>{' '}
+                            บาท
                         </p>
                     </div>
                 </div>
 
-                {accumulated?.periods?.length > 0 ? (
-                    <div className="mt-4 overflow-x-auto">
-                        <table className="w-full text-sm">
-                            <caption className="sr-only">
-                                งวดที่ยืนยันแล้วในปีงบประมาณ {fiscalYear}
-                            </caption>
-                            <thead>
-                                <tr className="bg-gray-50 text-left text-gray-600">
-                                    <th scope="col" className="px-4 py-2 font-semibold">งวด</th>
-                                    <th scope="col" className="px-4 py-2 font-semibold text-right">%</th>
-                                    <th scope="col" className="px-4 py-2 font-semibold text-right">ฐานรายรับ (บาท)</th>
-                                    <th scope="col" className="px-4 py-2 font-semibold text-right">เงินสำรอง (บาท)</th>
-                                    <th scope="col" className="px-4 py-2 font-semibold text-right">จำนวน (คน)</th>
+                {!loading && monthsPresent < 12 && (
+                    <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 flex items-start gap-2">
+                        <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+                        <span>
+                            ยังขาดอีก {12 - monthsPresent} งวด ยอดรายปีจะต่ำกว่าความจริง
+                            ควรนำเข้า payroll งวดที่ขาดก่อนยืนยัน
+                        </span>
+                    </div>
+                )}
+
+                {!loading && monthsPresent === 12 && (
+                    <div className="mt-3 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700 flex items-start gap-2">
+                        <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" />
+                        <span>ข้อมูลครบ 12/12 งวด — คำนวณและยืนยันยอดรายปีได้ครบถ้วน</span>
+                    </div>
+                )}
+
+                <div className="mt-4 overflow-x-auto">
+                    <table className="w-full text-sm">
+                        <caption className="sr-only">งวดรายเดือนของปีงบประมาณ {fiscalYear}</caption>
+                        <thead>
+                            <tr className="bg-gray-50 text-left text-gray-600">
+                                <th scope="col" className="px-4 py-2 font-semibold">
+                                    งวด
+                                </th>
+                                <th scope="col" className="px-4 py-2 font-semibold">
+                                    ชุดข้อมูล
+                                </th>
+                                <th scope="col" className="px-4 py-2 font-semibold text-right">
+                                    ฐานรายรับ (บาท)
+                                </th>
+                                <th scope="col" className="px-4 py-2 font-semibold text-right">
+                                    จำนวน (คน)
+                                </th>
+                                <th scope="col" className="px-4 py-2 font-semibold text-right">
+                                    สถานะ
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                            {loading ? (
+                                <tr>
+                                    <td colSpan={5} className="px-4 py-8 text-center text-gray-400">
+                                        <span className="inline-flex items-center gap-2">
+                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                            กำลังโหลดข้อมูล...
+                                        </span>
+                                    </td>
                                 </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-100">
-                                {accumulated.periods.map((period) => (
-                                    <tr key={period.id}>
+                            ) : (
+                                months.map((month) => (
+                                    <tr key={month.period_month} className="hover:bg-gray-50">
                                         <td className="px-4 py-2 text-gray-700">
-                                            {period.period_label} {period.period_year}
+                                            {month.period_label} {month.period_year}
+                                        </td>
+                                        <td
+                                            className={`px-4 py-2 ${
+                                                month.has_data ? 'text-gray-700' : 'text-gray-400'
+                                            }`}
+                                        >
+                                            {month.has_data ? (
+                                                <>
+                                                    {month.import_name}
+                                                    {month.period_source === 'inferred' && (
+                                                        <span
+                                                            className="ml-2 rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[11px] text-gray-500"
+                                                            title="ยังไม่ได้ระบุงวดของไฟล์ ระบบอนุมานจากวันที่อัปโหลด"
+                                                        >
+                                                            อนุมานจากวันที่อัปโหลด
+                                                        </span>
+                                                    )}
+                                                </>
+                                            ) : (
+                                                '— ไม่มีข้อมูล —'
+                                            )}
                                         </td>
                                         <td className="px-4 py-2 text-right text-gray-700">
-                                            {formatPercent(period.percent)}
+                                            {month.has_data ? formatMoney(month.income_base) : '—'}
                                         </td>
                                         <td className="px-4 py-2 text-right text-gray-700">
-                                            {formatMoney(period.total_income_base)}
+                                            {month.has_data ? formatNumber(month.total_employees) : '—'}
                                         </td>
-                                        <td className="px-4 py-2 text-right font-medium text-[#8B5E3C]">
-                                            {formatMoney(period.total_reserve)}
-                                        </td>
-                                        <td className="px-4 py-2 text-right text-gray-700">
-                                            {formatNumber(period.total_employees)}
+                                        <td className="px-4 py-2 text-right">
+                                            {month.has_data ? (
+                                                <span className="inline-flex rounded-full bg-green-50 border border-green-200 px-2 py-0.5 text-xs font-medium text-green-700">
+                                                    มีข้อมูล
+                                                </span>
+                                            ) : (
+                                                <span className="inline-flex rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-xs font-medium text-amber-700">
+                                                    ขาด
+                                                </span>
+                                            )}
                                         </td>
                                     </tr>
-                                ))}
-                            </tbody>
-                            <tfoot>
-                                <tr className="bg-[#FBF7EE] font-semibold text-[#8B5E3C]">
-                                    <td className="px-4 py-2">รวมสะสม</td>
-                                    <td className="px-4 py-2" />
-                                    <td className="px-4 py-2 text-right">
-                                        {formatMoney(accumulated.total_income_base)}
-                                    </td>
-                                    <td className="px-4 py-2 text-right">
-                                        {formatMoney(accumulated.total_reserve)}
-                                    </td>
-                                    <td className="px-4 py-2" />
-                                </tr>
-                            </tfoot>
-                        </table>
-                    </div>
-                ) : (
-                    <p className="mt-4 text-sm text-gray-500">
-                        ยังไม่มีงวดที่ยืนยันในปีงบประมาณนี้ — บันทึกผลการคำนวณของงวด แล้วกด «ยืนยันงวดนี้»
-                        เพื่อนำยอดเข้าสะสม
-                    </p>
-                )}
-            </div>
-
-            {!loading && unassignedCount > 0 && (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 flex items-start gap-2 print:hidden">
-                    <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
-                    <span>
-                        มีบุคลากร{' '}
-                        <span className="font-semibold">{formatNumber(unassignedCount)}</span> คน
-                        ที่ยังไม่ระบุตำแหน่ง/ภารกิจ/กลุ่มงาน/งาน จึงถูกนับรวมในกลุ่ม «ไม่ระบุภารกิจ»
-                        กรุณาอัปเดตข้อมูลในหน้ารายชื่อบุคลากร
-                    </span>
+                                ))
+                            )}
+                        </tbody>
+                        <tfoot>
+                            <tr className="bg-[#FBF7EE] print:hidden">
+                                <td colSpan={5} className="px-4 py-3">
+                                    <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1">
+                                        <span className="text-sm font-semibold text-[#8B5E3C]">
+                                            รวมทั้งปี ({monthsPresent}/12 งวด)
+                                        </span>
+                                        <span className="text-xs text-gray-600">
+                                            ฐานรายรับ{' '}
+                                            <span className="font-semibold text-gray-800">
+                                                {formatMoney(summary?.total_income_base)}
+                                            </span>{' '}
+                                            บาท · จำนวนบุคลากร{' '}
+                                            <span className="font-semibold text-gray-800">
+                                                {formatNumber(lastMonthWithData?.total_employees)}
+                                            </span>{' '}
+                                            คน (งวดล่าสุด)
+                                        </span>
+                                        <span className="text-sm font-semibold text-[#8B5E3C]">
+                                            เงินสำรอง {percentLabel}% (คิดครั้งเดียวจากยอดรวม) ={' '}
+                                            {formatMoney(summary?.total_reserve)} บาท
+                                        </span>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tfoot>
+                    </table>
                 </div>
-            )}
+            </div>
 
             {/* Summary Stats */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -611,7 +622,7 @@ const ReserveFundPage = () => {
                         <Wallet className="w-5 h-5" />
                     </div>
                     <div className="min-w-0">
-                        <p className="text-xs text-gray-500 truncate">ฐานรายรับรวม</p>
+                        <p className="text-xs text-gray-500 truncate">ฐานรายรับรายปี</p>
                         <p className="text-2xl font-semibold text-gray-800">
                             {loading ? (
                                 <span className="inline-block w-20 h-6 bg-gray-200 rounded animate-pulse" />
@@ -630,7 +641,9 @@ const ReserveFundPage = () => {
                         <Landmark className="w-5 h-5" />
                     </div>
                     <div className="min-w-0">
-                        <p className="text-xs text-gray-500 truncate">เงินสำรอง {percentLabel}%</p>
+                        <p className="text-xs text-gray-500 truncate">
+                            เงินสำรอง {percentLabel}%
+                        </p>
                         <p className="text-2xl font-semibold text-[#8B5E3C]">
                             {loading ? (
                                 <span className="inline-block w-20 h-6 bg-gray-200 rounded animate-pulse" />
@@ -671,7 +684,7 @@ const ReserveFundPage = () => {
                     <span>กำลังโหลดข้อมูล...</span>
                 </div>
             ) : (
-                duties.length > 0 && (
+                hasData && (
                     <div className="space-y-4">
                         <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
                             <h3 className="font-semibold text-gray-800">กราฟสรุป</h3>
@@ -703,17 +716,14 @@ const ReserveFundPage = () => {
                                         <PieChart>
                                             <Pie
                                                 data={chartData}
-                                                dataKey="value"
+                                                dataKey="reserve"
                                                 nameKey="name"
                                                 innerRadius={50}
                                                 outerRadius={90}
                                                 paddingAngle={2}
                                             >
                                                 {chartData.map((entry, idx) => (
-                                                    <Cell
-                                                        key={idx}
-                                                        fill={PIE_COLORS[idx % PIE_COLORS.length]}
-                                                    />
+                                                    <Cell key={idx} fill={PIE_COLORS[idx % PIE_COLORS.length]} />
                                                 ))}
                                             </Pie>
                                             <Tooltip content={<ChartTooltip />} />
@@ -729,7 +739,8 @@ const ReserveFundPage = () => {
 
                             <div className="rounded-xl border border-gray-200 bg-white p-4">
                                 <h4 className="font-semibold text-gray-800 mb-4">
-                                    เปรียบเทียบฐานรายรับกับเงินสำรอง {percentLabel}% ตาม{GROUP_BY_LABELS[groupBy]}
+                                    เปรียบเทียบฐานรายรับกับเงินสำรอง {percentLabel}% ตาม
+                                    {GROUP_BY_LABELS[groupBy]}
                                 </h4>
                                 <div className="h-72">
                                     <ResponsiveContainer width="100%" height="100%">
@@ -759,7 +770,7 @@ const ReserveFundPage = () => {
                                                 radius={[0, 4, 4, 0]}
                                             />
                                             <Bar
-                                                dataKey="value"
+                                                dataKey="reserve"
                                                 name={`สำรอง ${percentLabel}%`}
                                                 fill="#8B5E3C"
                                                 radius={[0, 4, 4, 0]}
@@ -777,7 +788,9 @@ const ReserveFundPage = () => {
             <div className="rounded-xl border border-gray-200 bg-white overflow-hidden print:border-none">
                 <div className="px-4 py-3 border-b border-gray-200 flex items-center gap-2">
                     <FileSpreadsheet className="w-4 h-4 text-[#8B5E3C]" />
-                    <h3 className="font-semibold text-gray-800">รายละเอียดจำแนกตามภารกิจ / กลุ่มงาน / งาน</h3>
+                    <h3 className="font-semibold text-gray-800">
+                        รายละเอียดจำแนกตามภารกิจ / กลุ่มงาน / งาน
+                    </h3>
                 </div>
 
                 {loading ? (
@@ -794,8 +807,12 @@ const ReserveFundPage = () => {
                         <table className="w-full text-sm">
                             <thead>
                                 <tr className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
-                                    <th className="px-4 py-3 font-semibold">ภารกิจ / กลุ่มงาน / งาน</th>
-                                    <th className="px-4 py-3 font-semibold text-right">ฐานรายรับ (บาท)</th>
+                                    <th className="px-4 py-3 font-semibold">
+                                        ภารกิจ / กลุ่มงาน / งาน
+                                    </th>
+                                    <th className="px-4 py-3 font-semibold text-right">
+                                        ฐานรายรับ (บาท)
+                                    </th>
                                     <th className="px-4 py-3 font-semibold text-right">
                                         เงินสำรอง {percentLabel}% (บาท)
                                     </th>
@@ -830,14 +847,14 @@ const ReserveFundPage = () => {
 };
 
 const DutyRows = ({ duty }) => {
+    const works = duty.works || [];
+
     return (
         <>
-            {duty.works.map((work, wIdx) => (
+            {works.map((work, wIdx) => (
                 <tr key={wIdx} className={wIdx === 0 ? 'bg-[#FBF7EE]' : undefined}>
                     <td className="px-4 py-3">
-                        <div className="font-semibold text-gray-800">
-                            {duty.name}
-                        </div>
+                        <div className="font-semibold text-gray-800">{duty.name}</div>
                         <div className="text-xs text-gray-500 pl-4">
                             {work.group_name}
                             <span className="mx-1">·</span>

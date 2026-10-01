@@ -259,7 +259,7 @@ class TravelExpenseClaimTest extends TestCase
             ->assertJsonCount(0, 'data');
     }
 
-    public function test_expense_category_must_be_domestic_or_overseas(): void
+    public function test_expense_category_must_be_an_allowed_type(): void
     {
         $this->actingAs($this->finance)
             ->postJson('/api/finance/travel-expense-claims', $this->payload([
@@ -270,10 +270,10 @@ class TravelExpenseClaimTest extends TestCase
 
         $this->actingAs($this->finance)
             ->postJson('/api/finance/travel-expense-claims', $this->payload([
-                'expense_category' => TravelExpenseClaim::CATEGORY_OVERSEAS,
+                'expense_category' => TravelExpenseClaim::CATEGORY_TRAINING,
             ]))
             ->assertCreated()
-            ->assertJsonPath('data.expense_category', TravelExpenseClaim::CATEGORY_OVERSEAS);
+            ->assertJsonPath('data.expense_category', TravelExpenseClaim::CATEGORY_TRAINING);
     }
 
     public function test_options_returns_both_expense_categories(): void
@@ -282,8 +282,8 @@ class TravelExpenseClaimTest extends TestCase
             ->getJson('/api/finance/travel-expense-claims/options?fiscal_year=2569')
             ->assertOk()
             ->assertJsonCount(2, 'data.expense_categories')
-            ->assertJsonPath('data.expense_categories.0.label', 'ภายในประเทศ')
-            ->assertJsonPath('data.expense_categories.1.label', 'ต่างประเทศ');
+            ->assertJsonPath('data.expense_categories.0.label', 'เดินทางไปราชการ')
+            ->assertJsonPath('data.expense_categories.1.label', 'เดินทางไปราชการโดยฝึกอบรม');
     }
 
     public function test_hr_role_cannot_access_travel_expense_claims(): void

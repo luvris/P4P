@@ -67,10 +67,6 @@ const ClaimDocumentSection = ({ fiscalYear, options, form, setField, readOnly, s
                         </option>
                     ))}
                 </select>
-                {/* ข้อความเต็มตามที่จะพิมพ์ลงแบบฟอร์ม Excel */}
-                {form.expense_category && (
-                    <p className="mt-1 text-xs text-gray-500">{form.expense_category}</p>
-                )}
                 {fieldErrors?.expense_category && (
                     <p className="mt-1 text-xs text-red-600">{fieldErrors.expense_category[0]}</p>
                 )}

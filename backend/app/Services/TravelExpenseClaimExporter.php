@@ -108,7 +108,9 @@ class TravelExpenseClaimExporter
     {
         $lines = [
             "(ภาคปีงบประมาณ {$claim->fiscal_year})",
-            $claim->expense_category,
+            // บนแบบฟอร์มใช้ข้อความเต็มตามต้นฉบับ ไม่ใช่ชื่อย่อที่โชว์ในแอป
+            // และใช้ข้อความเดียวกันทุกประเภท
+            TravelExpenseClaim::EXCEL_CATEGORY_LABEL,
             $claim->organization_name ?: '',
             $claim->claim_period
                 ? 'ประจำเดือน ' . ThaiFiscalYear::periodLabel($claim->claim_period)

@@ -6,6 +6,8 @@ import SelectedFilePanel from '../components/features/import/SelectedFilePanel';
 import PreviewTable from '../components/features/import/PreviewTable';
 import { importService } from '../services/importService';
 import { AlertTriangle, Link2Off } from 'lucide-react';
+import useFiscalYear from '../hooks/useFiscalYear';
+import { FISCAL_MONTHS, MONTH_LABELS, calendarYearOf, currentMonth } from '../utils/fiscalPeriod';
 
 const ImportPage = () => {
     const [selectedFile, setSelectedFile] = useState(null);
@@ -14,6 +16,10 @@ const ImportPage = () => {
     const [previewData, setPreviewData] = useState([]);
     const [warning, setWarning] = useState('');
     const [linkWarnings, setLinkWarnings] = useState([]);
+
+    // งวดของไฟล์ payroll — ใช้คำนวณเงินสำรองรายปี (เริ่มที่เดือนปัจจุบัน)
+    const { fiscalYear } = useFiscalYear();
+    const [periodMonth, setPeriodMonth] = useState(currentMonth);
 
     const handleFileSelect = (file) => {
         const validExtensions = ['xlsx', 'xls', 'txt'];
@@ -49,7 +55,10 @@ const ImportPage = () => {
 
         setLoading(true);
         try {
-            const result = await importService.uploadFile(selectedFile);
+            const result = await importService.uploadFile(selectedFile, {
+                fiscal_year: fiscalYear,
+                period_month: Number(periodMonth),
+            });
 
             setSummary(result.import);
             setPreviewData(result.preview || []);
@@ -98,6 +107,35 @@ const ImportPage = () => {
 
                 {/* Right: Summary + Selected File */}
                 <div className="space-y-6">
+                    {selectedFile && !summary && (
+                        <div className="bg-white rounded-2xl border border-[#E6D3A3] p-6">
+                            <h3 className="text-lg font-semibold text-gray-700 mb-4">
+                                งวดของไฟล์ (Payroll)
+                            </h3>
+                            <label
+                                htmlFor="import-period-month"
+                                className="block text-sm font-medium text-gray-700 mb-2"
+                            >
+                                งวดเดือน
+                            </label>
+                            <select
+                                id="import-period-month"
+                                value={periodMonth}
+                                onChange={(e) => setPeriodMonth(e.target.value)}
+                                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 focus:border-[#C5A059] focus:outline-none focus:ring-1 focus:ring-[#C5A059]"
+                            >
+                                {FISCAL_MONTHS.map((month) => (
+                                    <option key={month} value={month}>
+                                        {MONTH_LABELS[month]} {calendarYearOf(fiscalYear, month)}
+                                    </option>
+                                ))}
+                            </select>
+                            <p className="mt-2 text-xs text-gray-500">
+                                ปีงบประมาณ {fiscalYear} — ใช้ในการคำนวณเงินสำรองรายปี
+                            </p>
+                        </div>
+                    )}
+
                     {selectedFile && !summary && (
                         <SelectedFilePanel
                             file={selectedFile}

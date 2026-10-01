@@ -2,6 +2,24 @@ import api from './api';
 
 export const reserveFundService = {
     /**
+     * สรุปเงินสำรองรายปี — รวม payroll ทุกงวดของปีงบประมาณ
+     * @param {Object} params - { fiscal_year, percent }
+     */
+    getAnnual: async (params = {}) => {
+        const response = await api.get('/hr/reserve-fund/annual', { params });
+        return response.data;
+    },
+
+    /**
+     * บันทึกผลการคำนวณรายปี (1 ปีงบ = 1 รายการ)
+     * @param {Object} payload - { fiscal_year, percent, note }
+     */
+    saveAnnual: async (payload) => {
+        const response = await api.post('/hr/reserve-fund/annual', payload);
+        return response.data;
+    },
+
+    /**
      * ดึงรายชื่อ import ที่มีข้อมูล payroll (สำหรับเลือกช่วงข้อมูล)
      */
     getImports: async () => {

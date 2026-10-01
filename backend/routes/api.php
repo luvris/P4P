@@ -91,6 +91,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/reserve-fund',          [ReserveFundController::class, 'summary']);
         Route::get('/reserve-fund/imports',  [ReserveFundController::class, 'imports']);
 
+        // เงินสำรองรายปี — รวม payroll ทุกงวดของปีงบประมาณ (1 ปีงบ = 1 ผลลัพธ์)
+        Route::get('/reserve-fund/annual',  [ReserveFundController::class, 'annualSummary']);
+        Route::post('/reserve-fund/annual', [ReserveFundController::class, 'storeAnnual']);
+
         // บันทึก/ดูประวัติผลการคำนวณตามปีงบประมาณ (รายงวด)
         Route::get('/reserve-fund/fiscal-years',  [ReserveFundController::class, 'fiscalYears']);
         Route::get('/reserve-fund/accumulated',   [ReserveFundController::class, 'accumulatedSummary']);

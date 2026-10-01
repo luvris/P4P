@@ -331,10 +331,10 @@ class TravelExpenseClaimController extends Controller
             'data' => [
                 'fiscal_year'              => $fiscalYear,
                 'default_expense_category' => TravelExpenseClaim::DEFAULT_CATEGORY,
-                // ตัวเลือกใน dropdown: ภายในประเทศ / ต่างประเทศ
+                // ตัวเลือกใน dropdown: เดินทางไปราชการ / เดินทางไปราชการโดยฝึกอบรม
                 'expense_categories'       => [
-                    ['value' => TravelExpenseClaim::CATEGORY_DOMESTIC, 'label' => 'ภายในประเทศ'],
-                    ['value' => TravelExpenseClaim::CATEGORY_OVERSEAS, 'label' => 'ต่างประเทศ'],
+                    ['value' => TravelExpenseClaim::CATEGORY_TRAVEL, 'label' => 'เดินทางไปราชการ'],
+                    ['value' => TravelExpenseClaim::CATEGORY_TRAINING, 'label' => 'เดินทางไปราชการโดยฝึกอบรม'],
                 ],
                 'organization_name'        => config('travel_expense.organization_name'),
                 'months'                   => $months,
