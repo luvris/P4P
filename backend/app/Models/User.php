@@ -32,6 +32,30 @@ class User extends Authenticatable
         ];
     }
 
+    /**
+     * เพิกถอน token ทั้งหมดของ User ยกเว้นตัวที่ระบุ
+     *
+     * ใช้เมื่อเปลี่ยนรหัสผ่าน เพื่อตัดการใช้งานของอุปกรณ์อื่นที่อาจถือ token เก่าอยู่
+     * โดยคง token ที่ใช้เรียกคำขอนี้ไว้ไม่ให้ผู้ใช้ถูกไล่ออกจากเครื่องปัจจุบัน
+     *
+     * รองรับกรณี $keep เป็น null หรือ TransientToken (auth ผ่าน session/cookie)
+     * ซึ่งทั้งสองกรณีจะลบ token ที่ค้างอยู่ทั้งหมด
+     */
+    public function revokeOtherTokens(mixed $keep = null): int
+    {
+        $keepId = is_object($keep) && method_exists($keep, 'getKey')
+            ? $keep->getKey()
+            : null;
+
+        $query = $this->tokens();
+
+        if ($keepId) {
+            $query->where('id', '!=', $keepId);
+        }
+
+        return $query->delete();
+    }
+
     // Helper methods
     public function isAdmin(): bool
     {

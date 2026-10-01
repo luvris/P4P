@@ -78,6 +78,10 @@ class ProfileController extends Controller
         // cast 'hashed' ของโมเดล User จะ hash รหัสผ่านให้อัตโนมัติ
         $user->update(['password' => $validated['password']]);
 
+        // เพิกถอน token ของอุปกรณ์อื่นทั้งหมด — กันกรณี token เก่าที่เคยหลุดยังใช้งานได้
+        // โดยคง token ที่ใช้เรียกคำขอนี้ไว้ เพื่อไม่ให้ผู้ใช้ถูกไล่ออกจากเครื่องปัจจุบัน
+        $user->revokeOtherTokens($request->user()->currentAccessToken());
+
         return response()->json([
             'message' => 'เปลี่ยนรหัสผ่านสำเร็จ',
         ], 200);

@@ -18,9 +18,11 @@ return [
     |
     */
 
+    // Sanctum เทียบ origin ของคำขอ (มี port ด้วย) กับรายการนี้แบบตรงตัว
+    // จึงต้องใส่ localhost:5173 (พอร์ต default ของ Vite) ให้ครบ
     'stateful' => explode(',', env('SANCTUM_STATEFUL_DOMAINS', sprintf(
         '%s%s',
-        'localhost,localhost:3000,127.0.0.1,127.0.0.1:8000,::1',
+        'localhost,localhost:5173,127.0.0.1,127.0.0.1:5173,localhost:3000,127.0.0.1:8000,::1',
         Sanctum::currentApplicationUrlWithPort(),
         // Sanctum::currentRequestHost(),
     ))),
@@ -50,7 +52,7 @@ return [
     |
     */
 
-    'expiration' => null,
+    'expiration' => env('SANCTUM_EXPIRATION', 60 * 12),
 
     /*
     |--------------------------------------------------------------------------
