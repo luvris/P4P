@@ -11,6 +11,16 @@ export const employeeService = {
     },
 
     /**
+     * ค้นหาบุคลากรแบบพิมพ์แล้วเด้ง (autocomplete)
+     * @param {Object} params - { q, limit }
+     * คืน { data: [...], meta: { near: boolean } } — near = true เมื่อมีรายการที่ "ใกล้เคียง" คำค้น
+     */
+    suggestEmployees: async (params = {}) => {
+        const response = await api.get('/hr/employees/suggest', { params });
+        return response.data;
+    },
+
+    /**
      * เพิ่มบุคลากรใหม่
      * @param {Object} data - ข้อมูลบุคลากร
      */

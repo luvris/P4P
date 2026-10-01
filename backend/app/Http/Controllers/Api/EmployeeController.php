@@ -18,6 +18,21 @@ use Illuminate\Support\Facades\DB;
 class EmployeeController extends Controller
 {
     /**
+     * สถานะบุคลากรที่เลือกใน autocomplete ได้ — เอาเฉพาะคนที่ปฏิบัติงานอยู่
+     * (คนลาออก/ลาศึกษาต่อ/ลาเลี้ยงลูก ไม่ต้องขึ้นมาให้เลือก)
+     */
+    private const ACTIVE_EMPLOYEE_STATUSES = ['ปฏิบัติงานอยู่'];
+
+    /** จำนวนหลักขั้นต่ำของเลขบัตรประชาชนก่อนเริ่มแนะนำ "ใกล้เคียง" (กันเดามั่วตอนพิมพ์สั้น ๆ) */
+    private const NEAR_MATCH_MIN_DIGITS = 6;
+
+    /** ระยะห่างสูงสุด (แก้/เพิ่ม/ลบได้กี่ตัวอักษร) ที่ยังถือว่า "ใกล้เคียง" */
+    private const NEAR_MATCH_MAX_DISTANCE = 2;
+
+    /** เพดานจำนวนแถวที่สแกนหาเลขใกล้เคียง — กันฐานข้อมูลโตแล้วช้า */
+    private const NEAR_MATCH_SCAN_LIMIT = 5000;
+
+    /**
      * GET /api/hr/employees
      * List + search + filter + pagination
      */
@@ -148,6 +163,125 @@ class EmployeeController extends Controller
         }
 
         return response()->json($response);
+    }
+
+    /**
+     * GET /api/hr/employees/suggest
+     *
+     * ค้นหาบุคลากรแบบ "พิมพ์แล้วเด้ง" สำหรับ autocomplete
+     * - ค้นจากเลขบัตรประชาชน (พิมพ์กี่หลักก็เจอ), PID, ชื่อ, นามสกุล, เลขที่ตำแหน่ง, ชื่อตำแหน่ง
+     * - ถ้าพิมพ์เป็นตัวเลขตั้งแต่ 6 หลักขึ้นไปแล้ว "ไม่เจอตรง ๆ" จะแนบเลขบัตรประชาชนที่ใกล้เคียง
+     *   (ระยะ Levenshtein ≤ 2) มาให้ด้วย โดยติดธง near = true เพื่อให้ UI เตือนให้ตรวจสอบก่อนเลือก
+     */
+    public function suggest(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'q'     => ['nullable', 'string', 'max:255'],
+            'limit' => ['nullable', 'integer', 'min:1', 'max:50'],
+        ]);
+
+        $term   = trim((string) ($validated['q'] ?? ''));
+        $limit  = (int) ($validated['limit'] ?? 20);
+        $digits = preg_replace('/\D+/', '', $term) ?? '';
+
+        // เอาเฉพาะคนที่ยังปฏิบัติงานอยู่ — ทั้งผลการค้นหาปกติและการหาเลขใกล้เคียง
+        $base = fn () => Employee::query()
+            ->with(['prefix:id,name', 'position:id,name'])
+            ->whereHas('status', fn ($q) => $q->whereIn('name', self::ACTIVE_EMPLOYEE_STATUSES));
+
+        // ไม่พิมพ์อะไร → คืนรายชื่อชุดแรกให้เลือกได้เลย
+        if ($term === '') {
+            $employees = $base()->orderBy('first_name')->limit($limit)->get();
+
+            return response()->json([
+                'data' => $employees->map(fn ($e) => $this->formatSuggestion($e))->values(),
+                'meta' => ['near' => false],
+            ]);
+        }
+
+        $matches = $base()
+            ->where(function ($q) use ($term) {
+                $q->where('citizen_id', 'like', "%{$term}%")
+                    ->orWhere('employee_id', 'like', "%{$term}%")
+                    ->orWhere('first_name', 'like', "%{$term}%")
+                    ->orWhere('last_name', 'like', "%{$term}%")
+                    ->orWhere('position_number', 'like', "%{$term}%")
+                    ->orWhereHas('position', fn ($pq) => $pq->where('name', 'like', "%{$term}%"));
+            })
+            ->orderByRaw('citizen_id = ? desc', [$term]) // เลขตรงเป๊ะขึ้นก่อน
+            ->orderBy('first_name')
+            ->limit($limit)
+            ->get();
+
+        $data = $matches->map(fn ($e) => $this->formatSuggestion($e))->values()->all();
+        $near = false;
+
+        // ยังได้ไม่ครบ + พิมพ์เป็นตัวเลขยาวพอ → หาเลขบัตรประชาชนที่ "ใกล้เคียง" มาเติม
+        if (count($data) < $limit && strlen($digits) >= self::NEAR_MATCH_MIN_DIGITS) {
+            $skip = $matches->pluck('id')->all();
+
+            $ranked = $base()
+                ->whereNotNull('citizen_id')
+                ->when($skip !== [], fn ($q) => $q->whereNotIn('id', $skip))
+                ->limit(self::NEAR_MATCH_SCAN_LIMIT)
+                ->get()
+                ->map(fn ($e) => [
+                    'employee' => $e,
+                    'distance' => $this->citizenIdDistance($digits, $e->citizen_id),
+                ])
+                ->filter(fn ($row) => $row['distance'] !== null && $row['distance'] <= self::NEAR_MATCH_MAX_DISTANCE)
+                ->sortBy('distance')
+                ->values()
+                ->take($limit - count($data));
+
+            foreach ($ranked as $row) {
+                $data[] = $this->formatSuggestion($row['employee'], true, $row['distance']);
+            }
+
+            $near = $ranked->isNotEmpty();
+        }
+
+        return response()->json([
+            'data' => $data,
+            'meta' => ['near' => $near],
+        ]);
+    }
+
+    /**
+     * จัดรูปบุคลากร 1 คนให้ UI อ่านง่าย
+     */
+    private function formatSuggestion(Employee $employee, bool $near = false, ?int $distance = null): array
+    {
+        return [
+            'id'            => $employee->id,
+            'pid'           => $employee->employee_id,
+            'citizen_id'    => $employee->citizen_id,
+            'full_name'     => $employee->full_name,
+            'first_name'    => $employee->first_name,
+            'last_name'     => $employee->last_name,
+            'position_name' => $employee->position?->name,
+            'salary'        => $employee->salary,
+            'near'          => $near,
+            'distance'      => $distance,
+        ];
+    }
+
+    /**
+     * ระยะห่างระหว่างเลขที่พิมพ์กับเลขบัตรประชาชนจริง (เทียบแบบไม่สนใจศูนย์นำหน้า)
+     * คืน null ถ้าฝั่งใดไม่มีตัวเลขเลย
+     */
+    private function citizenIdDistance(string $typed, ?string $citizenId): ?int
+    {
+        $target = preg_replace('/\D+/', '', (string) $citizenId) ?? '';
+
+        if ($typed === '' || $target === '') {
+            return null;
+        }
+
+        return min(
+            levenshtein($typed, $target),
+            levenshtein(ltrim($typed, '0') ?: '0', ltrim($target, '0') ?: '0'), // ผู้ใช้มักไม่พิมพ์ศูนย์นำหน้า
+        );
     }
 
     /**

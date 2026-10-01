@@ -1,9 +1,8 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { X, Save, TrendingUp, Search } from 'lucide-react';
-import { employeeService } from '../../services/employeeService';
+import { X, Save, TrendingUp } from 'lucide-react';
 import { ADJUSTMENT_TYPES } from '../../services/salaryAdjustmentService';
-import useDebounce from '../../hooks/useDebounce';
 import { formatCurrency } from '../../utils/format';
+import EmployeeCombobox from './EmployeeCombobox';
 
 const todayStr = () => {
     const d = new Date();
@@ -43,10 +42,7 @@ const AddAdjustmentDrawer = ({ open, onClose, onSubmit }) => {
     const [globalError, setGlobalError] = useState('');
     const [submitting, setSubmitting] = useState(false);
 
-    const [employees, setEmployees] = useState([]);
-    const [empLoading, setEmpLoading] = useState(false);
-    const [empSearch, setEmpSearch] = useState('');
-    const debouncedEmpSearch = useDebounce(empSearch, 400);
+    const [selectedEmployee, setSelectedEmployee] = useState(null);
 
     const onCloseRef = useRef(onClose);
     useEffect(() => {
@@ -59,7 +55,7 @@ const AddAdjustmentDrawer = ({ open, onClose, onSubmit }) => {
             setForm(INITIAL_FORM);
             setErrors({});
             setGlobalError('');
-            setEmpSearch('');
+            setSelectedEmployee(null);
         }
     }, [open]);
 
@@ -73,55 +69,28 @@ const AddAdjustmentDrawer = ({ open, onClose, onSubmit }) => {
         return () => window.removeEventListener('keydown', handler);
     }, [open]);
 
-    // โหลดรายชื่อพนักงาน (ค้นหาได้)
-    useEffect(() => {
-        if (!open) return;
-        let cancelled = false;
-        const fetchEmp = async () => {
-            setEmpLoading(true);
-            try {
-                const params = { per_page: 50 };
-                if (debouncedEmpSearch) params.search = debouncedEmpSearch;
-                const res = await employeeService.getEmployees(params);
-                if (!cancelled) setEmployees(res.data || []);
-            } catch (err) {
-                console.error('Failed to load employees:', err);
-                if (!cancelled) setEmployees([]);
-            } finally {
-                if (!cancelled) setEmpLoading(false);
-            }
-        };
-        fetchEmp();
-        return () => {
-            cancelled = true;
-        };
-    }, [open, debouncedEmpSearch]);
-
-    const selectedEmployee = useMemo(
-        () => employees.find((e) => String(e.id) === String(form.employee_id)),
-        [employees, form.employee_id],
-    );
-
     const setField = useCallback((key, value) => {
         setForm((prev) => ({ ...prev, [key]: value }));
         setErrors((prev) => ({ ...prev, [key]: undefined }));
         setGlobalError('');
     }, []);
 
-    const handleSelectEmployee = useCallback(
-        (e) => {
-            const id = e.target.value;
-            const emp = employees.find((x) => String(x.id) === String(id));
-            setForm((prev) => ({
-                ...prev,
-                employee_id: id,
-                old_salary: emp?.salary != null ? String(emp.salary) : prev.old_salary,
-            }));
-            setErrors((prev) => ({ ...prev, employee_id: undefined }));
-            setGlobalError('');
-        },
-        [employees],
-    );
+    const handleSelectEmployee = useCallback((emp) => {
+        if (!emp) return;
+        setForm((prev) => ({
+            ...prev,
+            employee_id: emp.id,
+            old_salary: emp.salary != null ? String(emp.salary) : prev.old_salary,
+        }));
+        setSelectedEmployee(emp);
+        setErrors((prev) => ({ ...prev, employee_id: undefined }));
+        setGlobalError('');
+    }, []);
+
+    const handleClearEmployee = useCallback(() => {
+        setSelectedEmployee(null);
+        setField('employee_id', '');
+    }, [setField]);
 
     const increaseAmount = useMemo(() => {
         const o = Number(form.old_salary);
@@ -212,39 +181,14 @@ const AddAdjustmentDrawer = ({ open, onClose, onSubmit }) => {
                         </div>
                     )}
 
-                    {/* เลือกพนักงาน */}
+                    {/* เลือกบุคลากร — พิมพ์ชื่อ/เลขบัตรประชาชนแล้วรายการเด้งขึ้นทันที */}
                     <Field label="เลือกบุคลากร" required error={errors.employee_id}>
-                        <div className="relative">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                            <input
-                                type="text"
-                                value={empSearch}
-                                onChange={(e) => setEmpSearch(e.target.value)}
-                                placeholder="ค้นหาชื่อ / เลขบัตรประชาชน..."
-                                className={`${inputCls(errors.employee_id)} pl-9`}
-                                autoComplete="off"
-                            />
-                        </div>
-                        <select
-                            value={form.employee_id}
-                            onChange={handleSelectEmployee}
-                            className={`${inputCls(errors.employee_id)} mt-2`}
-                        >
-                            <option value="">
-                                {empLoading ? 'กำลังโหลด...' : '-- เลือกรายชื่อบุคลากร --'}
-                            </option>
-                            {employees.map((emp) => (
-                                <option key={emp.id} value={emp.id}>
-                                    {emp.full_name || `${emp.first_name} ${emp.last_name}`}
-                                    {emp.citizen_id ? ` (${emp.citizen_id})` : ''}
-                                </option>
-                            ))}
-                        </select>
-                        {selectedEmployee && (
-                            <p className="mt-1 text-xs text-gray-500">
-                                เงินเดือนปัจจุบัน: {formatCurrency(selectedEmployee.salary)} บาท
-                            </p>
-                        )}
+                        <EmployeeCombobox
+                            value={selectedEmployee}
+                            onSelect={handleSelectEmployee}
+                            onClear={handleClearEmployee}
+                            error={errors.employee_id}
+                        />
                     </Field>
 
                     {/* เงินเดือนเก่า */}

@@ -52,8 +52,11 @@ Route::middleware('auth:sanctum')->group(function () {
     // finance ดูหน้า Dashboard ได้ แต่แก้ข้อมูลไม่ได้
     // ========================================
     Route::middleware('role:admin,hr,finance')->prefix('hr')->group(function () {
-        Route::get('/employees',       [EmployeeController::class, 'index']);
-        Route::get('/employees/stats', [EmployeeController::class, 'stats']);
+        Route::get('/employees',         [EmployeeController::class, 'index']);
+        Route::get('/employees/stats',   [EmployeeController::class, 'stats']);
+
+        // ค้นหาแบบพิมพ์แล้วเด้ง (autocomplete) + แนะนำเลขบัตรประชาชนที่ใกล้เคียง
+        Route::get('/employees/suggest', [EmployeeController::class, 'suggest']);
 
         // Lookups (dropdown ทั้งหมดในคำขอเดียว) — ใช้กรองข้อมูลในหน้า view
         Route::get('/lookups', [EmployeeController::class, 'lookups']);
