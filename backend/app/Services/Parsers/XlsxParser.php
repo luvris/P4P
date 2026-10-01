@@ -7,6 +7,23 @@ use PhpOffice\PhpSpreadsheet\IOFactory;
 class XlsxParser
 {
     /**
+     * คอลัมน์รายรับที่ใช้เป็นฐานคำนวณเงินสำรอง + ชื่อที่ใช้แสดงให้ผู้ใช้อ่าน
+     * ถ้าตัวใดตัวหนึ่งจับคู่คอลัมน์ไม่ได้ ค่านั้นจะกลายเป็น 0 เงียบ ๆ จึงต้องเตือน
+     */
+    protected const RESERVE_INCOME_LABELS = [
+        'salary'             => 'เงินเดือน',
+        'overtime'           => 'ล่วงเวลา (OT)',
+        'position_allowance' => 'เงินประจำตำแหน่ง (พตส.)',
+        'p4p_income'         => 'เงิน P4P',
+    ];
+
+    /**
+     * คอลัมน์ที่ resolve ได้จากไฟล์ล่าสุด (field => index หรือ null)
+     * เก็บไว้ให้ตรวจว่ามีคอลัมน์สำคัญหายไปหรือไม่
+     */
+    protected array $resolvedIndexes = [];
+
+    /**
      * Fallback column mapping — ตรงกับ Excel จริง (ใช้เมื่อจำชื่อ header ไม่ได้)
      */
     protected array $columnMap = [
@@ -100,6 +117,9 @@ class XlsxParser
             $resolved[$field] = $this->resolveColumnIndex($field, $headerIndexByName);
         }
 
+        // จำไว้เพื่อให้เรียก missingReserveIncomeFields() ได้หลัง import
+        $this->resolvedIndexes = $resolved;
+
         $data = [];
 
         foreach ($rows as $row) {
@@ -118,6 +138,26 @@ class XlsxParser
         }
 
         return $data;
+    }
+
+    /**
+     * ชื่อคอลัมน์รายรับที่ "ไม่พบในไฟล์" — ค่าเหล่านั้นจะถูกบันทึกเป็น 0
+     *
+     * ใช้เตือนผู้ใช้หลังนำเข้า กันปัญหาคอลัมน์ P4P/OT หายไปเงียบ ๆ
+     *
+     * @return array<int, string> ชื่อที่ใช้แสดงผล
+     */
+    public function missingReserveIncomeFields(): array
+    {
+        $missing = [];
+
+        foreach (self::RESERVE_INCOME_LABELS as $field => $label) {
+            if (($this->resolvedIndexes[$field] ?? null) === null) {
+                $missing[] = $label;
+            }
+        }
+
+        return $missing;
     }
 
     /**

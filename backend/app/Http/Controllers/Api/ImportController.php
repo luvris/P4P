@@ -41,17 +41,37 @@ class ImportController extends Controller
         $previewData = $parser->parse($fullPath);
         $preview = array_slice($previewData, 0, 10);   // เอา 10 แถวแรก
 
-        // ประมวลผล
+        // ประมวลผล (ใช้ parser ตัวเดิม ไม่ต้องอ่านไฟล์ซ้ำ)
         $import = $this->importService->process(
             $fullPath,
             $originalName,
-            $request->user()->id
+            $request->user()->id,
+            $parser
         );
+
+        // คอลัมน์รายรับที่หาไม่เจอในไฟล์ — ค่านั้นจะถูกบันทึกเป็น 0
+        $missingIncomeFields = $parser->missingReserveIncomeFields();
+
+        // แถวที่ผูกกับทะเบียนบุคลากรไม่ได้ — เลขบัตรประชาชนอาจพิมพ์ผิด
+        $linkWarnings = collect($import->row_errors ?? [])
+            ->where('type', 'link')
+            ->values()
+            ->all();
+
+        $warning = null;
+        if ($missingIncomeFields !== []) {
+            $warning = 'ไม่พบคอลัมน์ ' . implode(', ', $missingIncomeFields)
+                . ' ในไฟล์ — คอลัมน์เหล่านี้จะถูกบันทึกเป็น 0 และทำให้ฐานคำนวณเงินสำรองขาดไป';
+        }
 
         return response()->json([
             'message' => 'นำเข้าข้อมูลสำเร็จ',
             'import' => $import,
             'preview' => $preview,
+            'missing_income_fields' => $missingIncomeFields,
+            'link_warnings' => $linkWarnings,
+            'link_warning_count' => count($linkWarnings),
+            'warning' => $warning,
             'uploader' => [
                 'id' => $request->user()->id,
                 'name' => $request->user()->name,

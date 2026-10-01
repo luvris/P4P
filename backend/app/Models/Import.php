@@ -45,6 +45,7 @@ class Import extends Model
         'inserted_rows' => 'integer',
         'updated_rows' => 'integer',
         'skipped_rows' => 'integer',
+        'row_errors' => 'array',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];

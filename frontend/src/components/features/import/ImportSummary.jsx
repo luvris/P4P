@@ -1,5 +1,5 @@
 import React from 'react';
-import { FileText, CheckCircle, XCircle, Copy } from 'lucide-react';
+import { FileText, CheckCircle, XCircle, Copy, MinusCircle } from 'lucide-react';
 
 const ImportSummary = ({ summary }) => {
   const cards = [
@@ -33,11 +33,23 @@ const ImportSummary = ({ summary }) => {
     },
   ];
 
+  // แถวรวมยอด/แถวที่ไม่มีเลขบัตรประชาชน — แสดงเฉพาะเมื่อมี เพื่อไม่ให้รกหน้าจอ
+  if (Number(summary?.skipped_rows) > 0) {
+    cards.push({
+      label: 'ข้าม (ไม่ใช่บุคลากร)',
+      value: summary.skipped_rows,
+      unit: 'รายการ',
+      icon: MinusCircle,
+      color: 'gray',
+    });
+  }
+
   const colorClasses = {
     blue: 'bg-blue-50 text-blue-600',
     green: 'bg-green-50 text-green-600',
     red: 'bg-red-50 text-red-600',
     yellow: 'bg-yellow-50 text-yellow-600',
+    gray: 'bg-gray-100 text-gray-600',
   };
 
   return (

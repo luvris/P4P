@@ -5,12 +5,15 @@ import ImportSummary from '../components/features/import/ImportSummary';
 import SelectedFilePanel from '../components/features/import/SelectedFilePanel';
 import PreviewTable from '../components/features/import/PreviewTable';
 import { importService } from '../services/importService';
+import { AlertTriangle, Link2Off } from 'lucide-react';
 
 const ImportPage = () => {
     const [selectedFile, setSelectedFile] = useState(null);
     const [loading, setLoading] = useState(false);
     const [summary, setSummary] = useState(null);
     const [previewData, setPreviewData] = useState([]);
+    const [warning, setWarning] = useState('');
+    const [linkWarnings, setLinkWarnings] = useState([]);
 
     const handleFileSelect = (file) => {
         const validExtensions = ['xlsx', 'xls', 'txt'];
@@ -29,12 +32,16 @@ const ImportPage = () => {
         setSelectedFile(file);
         setSummary(null);
         setPreviewData([]);
+        setWarning('');
+        setLinkWarnings([]);
     };
 
     const handleClear = () => {
         setSelectedFile(null);
         setSummary(null);
         setPreviewData([]);
+        setWarning('');
+        setLinkWarnings([]);
     };
 
     const handleImport = async () => {
@@ -46,7 +53,14 @@ const ImportPage = () => {
 
             setSummary(result.import);
             setPreviewData(result.preview || []);
-            toast.success('นำเข้าข้อมูลสำเร็จ!');
+            setWarning(result.warning || '');
+            setLinkWarnings(result.link_warnings || []);
+
+            if (result.warning) {
+                toast(result.warning, { icon: '⚠️' });
+            } else {
+                toast.success('นำเข้าข้อมูลสำเร็จ!');
+            }
 
         } catch (error) {
             const message = error.response?.data?.message || 'เกิดข้อผิดพลาด';
@@ -91,6 +105,40 @@ const ImportPage = () => {
                             onCancel={handleClear}
                             loading={loading}
                         />
+                    )}
+
+                    {warning && (
+                        <div className="flex items-start gap-2 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800">
+                            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                            <span>{warning}</span>
+                        </div>
+                    )}
+
+                    {linkWarnings.length > 0 && (
+                        <div className="rounded-2xl border border-red-200 bg-red-50 p-4">
+                            <div className="flex items-center gap-2 text-sm font-medium text-red-800">
+                                <Link2Off className="h-4 w-4 shrink-0" />
+                                <span>
+                                    พบ {linkWarnings.length.toLocaleString()} แถวที่เลขบัตรประชาชนไม่ตรงกับทะเบียนบุคลากร
+                                </span>
+                            </div>
+                            <p className="mt-1 text-xs text-red-700">
+                                คนเหล่านี้จะไม่ถูกนับในเงินสำรองและไม่รู้สังกัด กรุณาตรวจสอบก่อนสรุปยอด
+                            </p>
+                            <ul className="mt-3 max-h-64 space-y-2 overflow-y-auto">
+                                {linkWarnings.map((item, i) => (
+                                    <li
+                                        key={i}
+                                        className="rounded-lg border border-red-200 bg-white px-3 py-2 text-xs text-gray-700"
+                                    >
+                                        <span className="mr-1 font-medium text-red-700">
+                                            แถว {item.row ?? '-'}
+                                        </span>
+                                        {item.error}
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
                     )}
 
                     {summary && (
