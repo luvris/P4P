@@ -101,12 +101,6 @@ const AddAdjustmentDrawer = ({ open, onClose, onSubmit }) => {
         return n - o;
     }, [form.old_salary, form.new_salary]);
 
-    const increasePercent = useMemo(() => {
-        const o = Number(form.old_salary);
-        if (increaseAmount === null || o === 0) return null;
-        return (increaseAmount / o) * 100;
-    }, [increaseAmount, form.old_salary]);
-
     const handleSubmit = async (e) => {
         e.preventDefault();
         setSubmitting(true);
@@ -140,10 +134,6 @@ const AddAdjustmentDrawer = ({ open, onClose, onSubmit }) => {
             ? null
             : {
                   amount: formatCurrency(increaseAmount),
-                  percent:
-                      increasePercent === null
-                          ? '-'
-                          : `${increasePercent >= 0 ? '+' : ''}${increasePercent.toFixed(2)}%`,
                   positive: increaseAmount > 0,
                   negative: increaseAmount < 0,
               };
@@ -227,9 +217,7 @@ const AddAdjustmentDrawer = ({ open, onClose, onSubmit }) => {
                             }`}
                         >
                             ปรับ{' '}
-                            <span className="font-semibold">
-                                {increaseDisplay.amount} บาท ({increaseDisplay.percent})
-                            </span>
+                            <span className="font-semibold">{increaseDisplay.amount} บาท</span>
                         </div>
                     )}
 

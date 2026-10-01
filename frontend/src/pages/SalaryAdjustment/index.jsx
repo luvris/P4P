@@ -211,7 +211,6 @@ const SalaryAdjustmentPage = () => {
                                     <th className="px-4 py-3 font-semibold text-right">เงินเดือนเก่า</th>
                                     <th className="px-4 py-3 font-semibold text-right">เงินเดือนใหม่</th>
                                     <th className="px-4 py-3 font-semibold text-right">ปรับเพิ่ม</th>
-                                    <th className="px-4 py-3 font-semibold text-right">%</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
@@ -315,13 +314,6 @@ const AdjustmentRow = ({ item }) => {
                     ) : null}
                     {formatCurrency(Math.abs(Number(item.increase_amount)))}
                 </span>
-            </td>
-            <td className="px-4 py-3 text-right text-gray-500 whitespace-nowrap">
-                {item.increase_percent != null
-                    ? `${Number(item.increase_percent) >= 0 ? '+' : ''}${Number(
-                          item.increase_percent,
-                      ).toFixed(2)}%`
-                    : '-'}
             </td>
         </tr>
     );
