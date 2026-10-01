@@ -42,8 +42,9 @@ const Header = ({ title = 'Dashboard', onToggleSidebar }) => {
     return () => document.removeEventListener('keydown', handleEsc);
   }, []);
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    // รอให้ฝั่งเซิร์ฟเวอร์ล้าง session ก่อน แล้วจึงพากลับหน้า login
+    await logout();
     navigate('/', { replace: true });
   };
 

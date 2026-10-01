@@ -1,25 +1,31 @@
 import axios from 'axios';
 
+export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+
+// ปลายทางของ Sanctum สำหรับขอ CSRF cookie — อยู่นอก prefix /api จึงต้องตัด /api ออก
+export const CSRF_COOKIE_URL = `${API_URL.replace(/\/api\/?$/, '')}/sanctum/csrf-cookie`;
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000/api',
+  baseURL: API_URL,
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
   },
   timeout: 10000,
+  // ส่ง cookie ของ session ไปกับทุกคำขอ (Sanctum SPA) พร้อมให้ axios แนบ
+  // header X-XSRF-TOKEN อัตโนมัติ — ไม่เก็บ token ใน localStorage อีกต่อไป
+  withCredentials: true,
+  withXSRFToken: true,
 });
 
-//REQUEST INTERCEPTOR
-api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
+/* ============================================================
+ * ขอ CSRF cookie ก่อนคำขอที่เปลี่ยนข้อมูล
+ * ต้องเรียกก่อน POST /login ทุกครั้ง ไม่งั้นจะถูกปฏิเสธด้วย 419
+ *
+ * ใช้ axios ตัวกลาง (ไม่ผูก baseURL) เพราะ path นี้ไม่ได้อยู่ใต้ /api
+ * ============================================================ */
+export const fetchCsrfCookie = () =>
+  axios.get(CSRF_COOKIE_URL, { withCredentials: true });
 
 /* ============================================================
  * RESPONSE INTERCEPTOR
@@ -30,17 +36,15 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    // --- 401 Unauthorized (token หมดอายุ / ไม่ได้ login) ---
+    // --- 401 Unauthorized (session หมดอายุ / ไม่ได้ login) ---
     if (error.response?.status === 401) {
-      localStorage.removeItem('token');
+      localStorage.removeItem('token'); // ล้าง token เก่าที่ค้างจากเวอร์ชันก่อน
       localStorage.removeItem('user');
 
-      // Redirect ไป login ถ้ายังไม่อยู่หน้า login
-      if (
-        typeof window !== 'undefined' &&
-        !window.location.pathname.includes('/login')
-      ) {
-        window.location.href = '/login';
+      // หน้า login ของระบบอยู่ที่ "/" — ไม่ redirect ถ้าอยู่หน้านี้แล้ว
+      // (เช่น กรอกรหัสผ่านผิด ซึ่งก็ตอบ 401 เช่นกัน)
+      if (typeof window !== 'undefined' && window.location.pathname !== '/') {
+        window.location.href = '/';
       }
     }
 

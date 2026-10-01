@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import api from '../services/api';
+import api, { fetchCsrfCookie } from '../services/api';
 
 const useAuth = () => {
   const [loading, setLoading] = useState(false);
@@ -29,15 +29,19 @@ const useAuth = () => {
     setError('');
 
     try {
+      // ต้องขอ CSRF cookie ก่อน ไม่งั้นคำขอ POST จะถูกปฏิเสธด้วย 419
+      await fetchCsrfCookie();
+
       const response = await api.post('/login', { username, password });
-      
+
       const userData = response.data.user;
-      const token = response.data.token;
-      
+
+      // เก็บเฉพาะข้อมูลผู้ใช้สำหรับแสดงผลและการตรวจสิทธิ์ฝั่ง client
+      // ตัวตนจริงอยู่ใน session cookie ที่เป็น HttpOnly (JavaScript อ่านไม่ได้)
       setUser(userData);
       localStorage.setItem('user', JSON.stringify(userData));
-      localStorage.setItem('token', token);   //เก็บ token
-      
+      localStorage.removeItem('token'); // ล้าง token เก่าที่ค้างจากเวอร์ชันก่อน
+
       return { success: true, data: response.data };
     } catch (err) {
       let message = 'เกิดข้อผิดพลาด';
@@ -58,11 +62,19 @@ const useAuth = () => {
     }
   };
 
-  const logout = () => {
-    setUser(null);
-    setError('');
-    localStorage.removeItem('user');
-    localStorage.removeItem('token');
+  const logout = async () => {
+    try {
+      // สั่งล้าง session ที่ฝั่งเซิร์ฟเวอร์ก่อน — ถ้า session หมดอายุไปแล้ว
+      // (401) ก็ยังต้องล้างสถานะฝั่ง client ต่อ
+      await api.post('/logout');
+    } catch {
+      // ไม่ต้องทำอะไร — ล้างฝั่ง client ด้านล่างเสมอ
+    } finally {
+      setUser(null);
+      setError('');
+      localStorage.removeItem('user');
+      localStorage.removeItem('token');
+    }
   };
 
   //Helper functions สำหรับ role

@@ -21,7 +21,8 @@ export const FiscalYearProvider = ({ children }) => {
 
     const refreshFiscalYears = useCallback(async () => {
         // ยังไม่ login ก็ไม่ต้องยิง request (state เริ่มต้นเป็นลิสต์ว่างอยู่แล้ว)
-        if (!localStorage.getItem('token')) {
+        // ตรวจจาก 'user' เพราะระบบยืนยันตัวตนด้วย session cookie ไม่มี token ใน localStorage
+        if (!localStorage.getItem('user')) {
             return [];
         }
 
