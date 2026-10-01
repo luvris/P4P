@@ -78,8 +78,11 @@ class ProfileController extends Controller
         // cast 'hashed' ของโมเดล User จะ hash รหัสผ่านให้อัตโนมัติ
         $user->update(['password' => $validated['password']]);
 
-        // เพิกถอน token ของอุปกรณ์อื่นทั้งหมด — กันกรณี token เก่าที่เคยหลุดยังใช้งานได้
-        // โดยคง token ที่ใช้เรียกคำขอนี้ไว้ เพื่อไม่ให้ผู้ใช้ถูกไล่ออกจากเครื่องปัจจุบัน
+        // ตัดอุปกรณ์อื่นทั้งหมดที่ล็อกอินอยู่ โดยคงเครื่องที่กำลังใช้งานไว้
+        // - session: ระบบนี้ล็อกอินด้วย session cookie จึงต้องลบแถวในตาราง sessions
+        //   (ถ้า request นี้ไม่มี session เช่นเรียกด้วย bearer token ให้ตัดทั้งหมด)
+        // - token: เผื่อ client อื่นที่ยังใช้ bearer token
+        $user->revokeOtherSessions($request->hasSession() ? $request->session()->getId() : null);
         $user->revokeOtherTokens($request->user()->currentAccessToken());
 
         return response()->json([

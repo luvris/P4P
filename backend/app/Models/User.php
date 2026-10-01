@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\DB;
 use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
@@ -51,6 +52,32 @@ class User extends Authenticatable
 
         if ($keepId) {
             $query->where('id', '!=', $keepId);
+        }
+
+        return $query->delete();
+    }
+
+    /**
+     * ตัด session ของอุปกรณ์อื่นของผู้ใช้รายนี้
+     *
+     * ระบบนี้ล็อกอินด้วย session cookie (SESSION_DRIVER=database)
+     * จึงต้องลบแถวในตาราง sessions — ไม่ใช่ personal_access_tokens ที่เลิกใช้แล้ว
+     *
+     * @param  string|null  $keepSessionId  session ที่ต้องการคงไว้ (เครื่องที่กำลังใช้งานอยู่)
+     * @return int จำนวน session ที่ถูกตัด
+     */
+    public function revokeOtherSessions(?string $keepSessionId = null): int
+    {
+        // driver อื่น (array / file) ไม่ได้เก็บ session ไว้ในฐานข้อมูล จึงไม่มีอะไรให้ลบ
+        if (config('session.driver') !== 'database') {
+            return 0;
+        }
+
+        $query = DB::table(config('session.table', 'sessions'))
+            ->where('user_id', $this->getKey());
+
+        if ($keepSessionId) {
+            $query->where('id', '!=', $keepSessionId);
         }
 
         return $query->delete();
