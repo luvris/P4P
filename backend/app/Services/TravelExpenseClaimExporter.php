@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\TravelExpenseClaim;
 use App\Support\ThaiFiscalYear;
+use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
@@ -77,16 +78,19 @@ class TravelExpenseClaimExporter
         $firstDataRow = $row;
 
         foreach ($claim->items as $index => $item) {
-            $sheet->fromArray([
-                $index + 1,
-                $item->first_name,
-                $item->last_name,
-                (float) $item->allowance_amount,
-                (float) $item->accommodation_amount,
-                (float) $item->transportation_amount,
-                (float) $item->other_amount,
-                (float) $item->total_amount,
-            ], null, "A{$row}");
+            // ลำดับและจำนวนเงินเป็นตัวเลขที่ระบบคำนวณเอง — เขียนตรงได้
+            $sheet->setCellValue("A{$row}", $index + 1);
+
+            // ชื่อ-นามสกุลมาจากผู้ใช้ ต้องบังคับเป็น string เสมอ
+            $this->setTextCell($sheet, "B{$row}", $item->first_name);
+            $this->setTextCell($sheet, "C{$row}", $item->last_name);
+
+            $sheet->setCellValue("D{$row}", (float) $item->allowance_amount);
+            $sheet->setCellValue("E{$row}", (float) $item->accommodation_amount);
+            $sheet->setCellValue("F{$row}", (float) $item->transportation_amount);
+            $sheet->setCellValue("G{$row}", (float) $item->other_amount);
+            $sheet->setCellValue("H{$row}", (float) $item->total_amount);
+
             $row++;
         }
 
@@ -121,7 +125,7 @@ class TravelExpenseClaimExporter
                 continue;
             }
 
-            $sheet->setCellValue("A{$row}", $line);
+            $this->setTextCell($sheet, "A{$row}", $line);
             $sheet->mergeCells("A{$row}:H{$row}");
             $sheet->getStyle("A{$row}")->getFont()->setBold(true)->setSize($row === 1 ? 14 : 12);
             $sheet->getStyle("A{$row}")->getAlignment()
@@ -132,8 +136,21 @@ class TravelExpenseClaimExporter
         return $row + 1;
     }
 
+    /**
+     * เขียนค่าที่มาจากผู้ใช้เป็นข้อความธรรมดา
+     *
+     * setCellValue()/fromArray() จะตรวจสตริงที่ขึ้นต้นด้วย "=" แล้วสร้างเป็น "สูตร" Excel
+     * ทำให้เกิด Excel Formula Injection (CWE-1236) — ค่าอย่าง "=cmd|' /C calc'!A0"
+     * จะกลายเป็นคำสั่งที่ทำงานเมื่อผู้ใช้เปิดไฟล์ จึงต้องบังคับชนิดเป็น TYPE_STRING ทุกครั้ง
+     */
+    private function setTextCell($sheet, string $coordinate, ?string $value): void
+    {
+        $sheet->setCellValueExplicit($coordinate, (string) $value, DataType::TYPE_STRING);
+    }
+
     private function writeTableHeader($sheet, int $row): void
     {
+        // หัวตารางเป็นค่าคงที่ของระบบ ไม่ได้มาจากผู้ใช้ จึงเขียนผ่าน fromArray ได้
         $sheet->fromArray(self::HEADERS, null, "A{$row}");
 
         $style = $sheet->getStyle("A{$row}:H{$row}");
