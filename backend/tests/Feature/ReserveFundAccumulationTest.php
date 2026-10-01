@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Duty;
 use App\Models\Employee;
+use App\Models\EmployeeStatus;
 use App\Models\Group;
 use App\Models\Import;
 use App\Models\Payroll;
@@ -38,12 +39,16 @@ class ReserveFundAccumulationTest extends TestCase
         $group = Group::create(['name' => 'กลุ่มงานการพยาบาลผู้ป่วยนอก', 'duty_id' => $duty->id]);
         Work::create(['name' => 'งานผู้ป่วยนอก', 'group_id' => $group->id]);
 
+        // ฐานเงินสำรองนับเฉพาะคนที่ยังปฏิบัติงานอยู่
+        $working = EmployeeStatus::create(['name' => 'ปฏิบัติงานอยู่', 'sort_order' => 1]);
+
         Employee::create([
             'citizen_id' => '1111111111111',
             'first_name' => 'สมชาย',
             'last_name'  => 'ใจดี',
             'duty_id'    => $duty->id,
             'group_id'   => $group->id,
+            'status_id'  => $working->id,
         ]);
     }
 

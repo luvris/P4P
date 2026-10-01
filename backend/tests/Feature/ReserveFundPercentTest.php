@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Duty;
 use App\Models\Employee;
+use App\Models\EmployeeStatus;
 use App\Models\Group;
 use App\Models\Import;
 use App\Models\Payroll;
@@ -35,12 +36,16 @@ class ReserveFundPercentTest extends TestCase
         $group = Group::create(['name' => 'กลุ่มงานการพยาบาลผู้ป่วยนอก', 'duty_id' => $duty->id]);
         Work::create(['name' => 'งานผู้ป่วยนอก', 'group_id' => $group->id]);
 
+        // ฐานเงินสำรองนับเฉพาะคนที่ยังปฏิบัติงานอยู่
+        $working = EmployeeStatus::create(['name' => 'ปฏิบัติงานอยู่', 'sort_order' => 1]);
+
         Employee::create([
             'citizen_id' => '1111111111111',
             'first_name' => 'สมชาย',
             'last_name'  => 'ใจดี',
             'duty_id'    => $duty->id,
             'group_id'   => $group->id,
+            'status_id'  => $working->id,
         ]);
 
         $this->import = Import::create([
@@ -93,6 +98,93 @@ class ReserveFundPercentTest extends TestCase
             ->assertOk()
             ->assertJsonPath('summary.percent', 2.5)
             ->assertJsonPath('summary.total_reserve', 750);
+    }
+
+    public function test_payroll_of_a_resigned_employee_is_not_counted(): void
+    {
+        $resigned = EmployeeStatus::create(['name' => 'ลาออก', 'sort_order' => 3]);
+
+        $employee = Employee::create([
+            'citizen_id' => '2222222222222',
+            'first_name' => 'สมหญิง',
+            'last_name'  => 'รักดี',
+            'status_id'  => $resigned->id,
+        ]);
+
+        Payroll::create([
+            'import_id'  => $this->import->id,
+            'citizen_id' => $employee->citizen_id,
+            'first_name' => 'สมหญิง',
+            'last_name'  => 'รักดี',
+            'salary'     => 40000,
+        ]);
+
+        $this->actingAs($this->user)
+            ->getJson("/api/hr/reserve-fund?import_id={$this->import->id}")
+            ->assertOk()
+            ->assertJsonPath('summary.total_income_base', 30000)
+            ->assertJsonPath('summary.total_employees', 1);
+    }
+
+    public function test_payroll_of_an_employee_on_leave_is_not_counted(): void
+    {
+        $onLeave = EmployeeStatus::create(['name' => 'ลาศึกษาต่อ', 'sort_order' => 2]);
+
+        $employee = Employee::create([
+            'citizen_id' => '3333333333333',
+            'first_name' => 'สมปอง',
+            'last_name'  => 'เรียบดี',
+            'status_id'  => $onLeave->id,
+        ]);
+
+        Payroll::create([
+            'import_id'  => $this->import->id,
+            'citizen_id' => $employee->citizen_id,
+            'first_name' => 'สมปอง',
+            'last_name'  => 'เรียบดี',
+            'salary'     => 50000,
+        ]);
+
+        $this->actingAs($this->user)
+            ->getJson("/api/hr/reserve-fund?import_id={$this->import->id}")
+            ->assertOk()
+            ->assertJsonPath('summary.total_income_base', 30000);
+    }
+
+    public function test_payroll_that_cannot_be_matched_to_an_employee_is_not_counted(): void
+    {
+        Payroll::create([
+            'import_id'  => $this->import->id,
+            'citizen_id' => '9999999999999', // ไม่มีในทะเบียนบุคลากร
+            'first_name' => 'ไม่ทราบ',
+            'last_name'  => 'ชื่อ',
+            'salary'     => 70000,
+        ]);
+
+        $this->actingAs($this->user)
+            ->getJson("/api/hr/reserve-fund?import_id={$this->import->id}")
+            ->assertOk()
+            ->assertJsonPath('summary.total_income_base', 30000);
+    }
+
+    public function test_payroll_summary_rows_without_citizen_id_are_not_counted(): void
+    {
+        // แถว "รวมยอด" ท้ายไฟล์ payroll — ไม่มีเลขบัตรประชาชน
+        // ถ้านับด้วยจะทำให้ฐานคำนวณเงินสำรองพองเป็นสองเท่า
+        Payroll::create([
+            'import_id'  => $this->import->id,
+            'citizen_id' => null,
+            'first_name' => null,
+            'last_name'  => null,
+            'salary'     => 20000,
+            'net_income' => 20000,
+        ]);
+
+        $this->actingAs($this->user)
+            ->getJson("/api/hr/reserve-fund?import_id={$this->import->id}")
+            ->assertOk()
+            ->assertJsonPath('summary.total_income_base', 30000)
+            ->assertJsonPath('summary.total_employees', 1);
     }
 
     public function test_income_breakdown_is_returned(): void

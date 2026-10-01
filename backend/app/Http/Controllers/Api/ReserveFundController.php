@@ -12,6 +12,14 @@ use Illuminate\Support\Facades\DB;
 class ReserveFundController extends Controller
 {
     /**
+     * สถานะบุคลากรที่นับในฐานเงินสำรอง — เฉพาะคนที่ปฏิบัติงานอยู่
+     *
+     * คนลาออก/ลาศึกษาต่อ/ลาเลี้ยงลูก ไม่ถูกนับ และแถวที่ผูกกับทะเบียนบุคลากรไม่ได้
+     * (เลขบัตรประชาชนไม่ตรง) ก็ไม่ถูกนับเช่นกัน
+     */
+    protected const ACTIVE_EMPLOYEE_STATUSES = ['ปฏิบัติงานอยู่'];
+
+    /**
      * นิพจน์ฐานคำนวณ = เงินเดือน + OT + เงินประจำตำแหน่ง + P4P
      */
     protected function incomeBaseExpression(): string
@@ -22,7 +30,10 @@ class ReserveFundController extends Controller
 
     /**
      * ดึงยอดรวมรายรับ จัดกลุ่มตาม ภารกิจ / กลุ่มงาน / งาน
-     * ไม่นับบุคลากรสถานะ "ลาออก"
+     * นับเฉพาะบุคลากรที่ยัง "ปฏิบัติงานอยู่"
+     *
+     * ตัดแถวที่ไม่มีเลขบัตรประชาชนออก เพราะแถวเหล่านั้นคือ "แถวรวมยอด" ท้ายไฟล์ payroll
+     * ไม่ใช่บุคลากรจริง ถ้านับด้วยจะทำให้ฐานคำนวณพองเป็นสองเท่า
      */
     protected function queryRows(?int $importId)
     {
@@ -35,10 +46,9 @@ class ReserveFundController extends Controller
             ->leftJoin('works as w', 'w.id', '=', 'e.work_id')
             ->leftJoin('employee_statuses as es', 'es.id', '=', 'e.status_id')
             ->when($importId, fn ($q) => $q->where('p.import_id', $importId))
-            ->where(function ($q) {
-                $q->whereNull('es.id')
-                    ->orWhere('es.name', '!=', 'ลาออก');
-            })
+            ->whereNotNull('p.citizen_id')
+            ->where('p.citizen_id', '!=', '')
+            ->whereIn('es.name', self::ACTIVE_EMPLOYEE_STATUSES)
             ->select(
                 'd.id as duty_id',
                 'd.name as duty_name',
