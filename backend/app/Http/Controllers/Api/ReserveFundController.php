@@ -32,34 +32,97 @@ class ReserveFundController extends Controller
     }
 
     /**
+     * คอลัมน์ปีงบ/งวดที่ใช้คัดงวด — อ่านจากแถวก่อน แล้วค่อย fallback ไปที่ชุดข้อมูล
+     *
+     * ทำให้รองรับทั้งไฟล์ที่ระบุงวดทุกแถว (ไฟล์หลายเดือนในไฟล์เดียว)
+     * และไฟล์ที่ระบุงวดที่ชุดข้อมูล (ไฟล์เดือนเดียว)
+     */
+    protected function payrollFiscalYearColumn()
+    {
+        return DB::raw('COALESCE(p.fiscal_year, i.fiscal_year)');
+    }
+
+    protected function payrollPeriodMonthColumn()
+    {
+        return DB::raw('COALESCE(p.period_month, i.period_month)');
+    }
+
+    /** นิพจน์ SQL ของปีงบ/งวด (ข้อความธรรมดา ใช้ต่อท้ายใน select ได้) */
+    protected function payrollFiscalYearSql(): string
+    {
+        return 'COALESCE(p.fiscal_year, i.fiscal_year)';
+    }
+
+    protected function payrollPeriodMonthSql(): string
+    {
+        return 'COALESCE(p.period_month, i.period_month)';
+    }
+
+    /**
      * ดึงยอดรวมรายรับ จัดกลุ่มตาม ภารกิจ / กลุ่มงาน / งาน
      * นับเฉพาะบุคลากรที่ยัง "ปฏิบัติงานอยู่"
      *
      * ตัดแถวที่ไม่มีเลขบัตรประชาชนออก เพราะแถวเหล่านั้นคือ "แถวรวมยอด" ท้ายไฟล์ payroll
      * ไม่ใช่บุคลากรจริง ถ้านับด้วยจะทำให้ฐานคำนวณพองเป็นสองเท่า
+     *
+     * @param  array<int, int>|int|null  $importIds  กรองตามชุดข้อมูล (แบบเดิม)
+     * @param  array<int, array{fiscal_year:int, period_month:int}>|null  $periods
+     *         กรองตามปีงบ+งวดจริงในไฟล์ — รองรับไฟล์ที่มีหลายเดือนในไฟล์เดียว
      */
-    protected function queryRows(array|int|null $importId = null)
+    protected function queryRows(?array $importIds = null, ?array $periods = null)
     {
         $incomeBase = $this->incomeBaseExpression();
 
-        // null = ไม่กรองชุดข้อมูล, array ว่าง = ไม่มีข้อมูลให้คำนวณ
-        $importIds = match (true) {
-            is_array($importId) => array_values(array_filter($importId, fn ($v) => $v !== null)),
-            $importId !== null  => [$importId],
-            default             => [],
-        };
+        $importIds = $importIds === null ? null : array_values(array_filter($importIds));
+        $periods = $periods === null ? null : array_values($periods);
 
-        return DB::table('payrolls as p')
+        // ไม่มีตัวกรองเลย = ไม่เอาข้อมูล (กันไม่ให้ลืมเงื่อนไขแล้วไปดึงทั้งตาราง)
+        if (($importIds === null || $importIds === []) && ($periods === null || $periods === [])) {
+            return collect();
+        }
+
+        $query = DB::table('payrolls as p')
+            ->leftJoin('imports as i', 'i.id', '=', 'p.import_id')
             ->leftJoin('employees as e', 'e.citizen_id', '=', 'p.citizen_id')
             ->leftJoin('duties as d', 'd.id', '=', 'e.duty_id')
             ->leftJoin('groups as g', 'g.id', '=', 'e.group_id')
             ->leftJoin('works as w', 'w.id', '=', 'e.work_id')
             ->leftJoin('employee_statuses as es', 'es.id', '=', 'e.status_id')
-            ->when($importIds === [], fn ($q) => $q->whereRaw('1 = 0'))
-            ->when($importIds !== [], fn ($q) => $q->whereIn('p.import_id', $importIds))
             ->whereNotNull('p.citizen_id')
             ->where('p.citizen_id', '!=', '')
-            ->whereIn('es.name', self::ACTIVE_EMPLOYEE_STATUSES)
+            ->whereIn('es.name', self::ACTIVE_EMPLOYEE_STATUSES);
+
+        if ($importIds !== null && $importIds !== []) {
+            $query->whereIn('p.import_id', $importIds);
+        }
+
+        if ($periods !== null && $periods !== []) {
+            $query->where(function ($q) use ($periods) {
+                foreach ($periods as $period) {
+                    $q->orWhere(function ($sub) use ($period) {
+                        // ชุดข้อมูลที่ไม่ได้ระบุงวดเลย (ทั้งแถวและไฟล์)
+                        // ต้องจับคู่ด้วย import_id อย่างเดียว เพราะไม่มีค่าปีงบ/งวดให้เทียบ
+                        if (! empty($period['untagged'])) {
+                            $sub->where('p.import_id', $period['import_id']);
+
+                            return;
+                        }
+
+                        // งวดจริงของแถว — ถ้าแถวไม่ได้ระบุ (ไฟล์รูปแบบเดิม)
+                        // ใช้ค่าที่ติดไว้ที่ชุดข้อมูลแทน
+                        $sub->where($this->payrollFiscalYearColumn(), $period['fiscal_year'])
+                            ->where($this->payrollPeriodMonthColumn(), $period['period_month']);
+
+                        // ถ้างวดเดียวกันถูกอัปโหลดหลายครั้ง ใช้ชุดข้อมูลล่าสุดของงวดนั้น
+                        if (! empty($period['import_id'])) {
+                            $sub->where('p.import_id', $period['import_id']);
+                        }
+                    });
+                }
+            });
+        }
+
+        return $query
             ->select(
                 'd.id as duty_id',
                 'd.name as duty_name',
@@ -72,7 +135,9 @@ class ReserveFundController extends Controller
                 DB::raw('SUM(COALESCE(p.overtime, 0)) as overtime'),
                 DB::raw('SUM(COALESCE(p.position_allowance, 0)) as position_allowance'),
                 DB::raw('SUM(COALESCE(p.p4p_income, 0)) as p4p_income'),
-                DB::raw('COUNT(*) as employee_count')
+                // นับคนไม่ซ้ำ — ตาราง payroll เก็บหนึ่งแถวต่อคนต่องวด
+                // ถ้าใช้ COUNT(*) คนเดียวจะถูกนับซ้ำทุกงวด (8 งวด = ตัวคูณ 8)
+                DB::raw('COUNT(DISTINCT p.citizen_id) as employee_count')
             )
             ->groupBy('d.id', 'd.name', 'g.id', 'g.name', 'w.id', 'w.name')
             ->get();
@@ -81,9 +146,9 @@ class ReserveFundController extends Controller
     /**
      * สรุปยอดรวมทั้งหมดสำหรับบันทึกผลการคำนวณ
      */
-    protected function aggregate(array|int|null $importId = null): array
+    protected function aggregate(?array $importIds = null, ?array $periods = null): array
     {
-        $rows = $this->queryRows($importId);
+        $rows = $this->queryRows($importIds, $periods);
 
         $breakdown = [
             'salary'             => 0.0,
@@ -293,6 +358,7 @@ class ReserveFundController extends Controller
         ];
     }
 
+
     /**
      * งวดของ import — ใช้ค่าที่บันทึกไว้ ถ้าไม่มีให้อนุมานจากวันที่อัปโหลด
      */
@@ -308,7 +374,17 @@ class ReserveFundController extends Controller
             ];
         }
 
-        $created = $import->created_at ?? now();
+        return $this->inferPeriod($import->created_at);
+    }
+
+    /**
+     * อนุมานงวดจากวันที่อัปโหลด (เดือน ต.ค. เป็นเดือนแรกของปีงบประมาณ)
+     *
+     * @return array{fiscal_year:int, period_month:int, period_year:int, source:string}
+     */
+    protected function inferPeriod($createdAt): array
+    {
+        $created = $createdAt ? \Illuminate\Support\Carbon::parse($createdAt) : now();
         $month = (int) $created->format('n');
         $year = (int) $created->format('Y') + 543;
 
@@ -325,26 +401,37 @@ class ReserveFundController extends Controller
      *
      * @return array<int, Import> เรียงตามรอบปีงบ (ต.ค. → ก.ย.)
      */
-    protected function payrollImportsForFiscalYear(int $fiscalYear): array
+    protected function payrollPeriodsForFiscalYear(int $fiscalYear): array
     {
-        $imports = Import::query()
-            ->where('import_type', 'payroll')
-            ->whereHas('payrolls')
-            ->orderBy('created_at')
-            ->orderBy('id')
-            ->get();
+        // อ่านงวดจริงจากแต่ละแถวใน payrolls ไม่ใช่จากชุดข้อมูล
+        // เพราะไฟล์หนึ่งไฟล์อาจมีหลายเดือนปนกัน (เช่น ส่งยอดทั้งปีทีเดียว)
+        //
+        // หมายเหตุ: ต้องไม่กรอง citizen_id ที่นี่
+        // งวดที่ไม่มีใครผูกทะเบียนได้เลยก็ยังเป็นงวดที่มีข้อมูล
+        // ต้องเห็นมัน เพื่อไปรายงานว่าเงินของงวดนั้นหายไป
+        $rows = DB::table('payrolls as p')
+            ->leftJoin('imports as i', 'i.id', '=', 'p.import_id')
+            ->where($this->payrollFiscalYearColumn(), $fiscalYear)
+            ->whereNotNull($this->payrollPeriodMonthColumn())
+            ->groupBy($this->payrollPeriodMonthColumn())
+            ->orderBy($this->payrollPeriodMonthColumn())
+            ->get([
+                DB::raw($this->payrollPeriodMonthSql() . ' as period_month'),
+                // งวดเดียวกันอัปโหลดหลายครั้ง → ใช้ชุดข้อมูลล่าสุดของงวดนั้น
+                DB::raw('MAX(p.import_id) as import_id'),
+            ]);
 
         $byMonth = [];
-
-        foreach ($imports as $import) {
-            $period = $this->periodOf($import);
-
-            if ($period['fiscal_year'] !== $fiscalYear) {
-                continue;
-            }
-
-            // เรียงจากเก่าไปใหม่ จึงเก็บตัวหลังสุด (ล่าสุด) ไว้
-            $byMonth[$period['period_month']] = $import;
+        foreach ($rows as $row) {
+            $month = (int) $row->period_month;
+            $byMonth[$month] = [
+                'fiscal_year'   => $fiscalYear,
+                'period_month'  => $month,
+                'period_year'   => ReserveFundCalculation::calendarYearOf($fiscalYear, $month),
+                'import_id'     => (int) $row->import_id,
+                'import_name'   => Import::where('id', $row->import_id)->value('file_name'),
+                'period_source' => 'from_file',
+            ];
         }
 
         $ordered = [];
@@ -354,7 +441,54 @@ class ReserveFundController extends Controller
             }
         }
 
-        return $ordered;
+        // ชุดข้อมูลที่ไม่ได้ระบุงวดทั้งที่แถวและที่ไฟล์
+        // ต้องอนุมานงวดจากวันที่อัปโหลด ถึงจะแยกรายเดือนได้
+        $untagged = DB::table('payrolls as p')
+            ->join('imports as i', 'i.id', '=', 'p.import_id')
+            ->whereNull('p.fiscal_year')
+            ->whereNull('i.fiscal_year')
+            ->whereNull('p.period_month')
+            ->whereNull('i.period_month')
+            ->whereNotNull('p.citizen_id')
+            ->where('p.citizen_id', '!=', '')
+            ->orderBy('i.created_at')
+            ->orderBy('i.id')
+            ->get(['p.import_id', 'i.file_name', 'i.created_at']);
+
+        foreach ($untagged as $row) {
+            $period = $this->inferPeriod($row->created_at);
+
+            if ($period['fiscal_year'] !== $fiscalYear) {
+                continue;
+            }
+
+            $month = $period['period_month'];
+
+            // งวดนี้มีข้อมูลจากไฟล์ที่ระบุงวดชัดเจนแล้ว → ข้อมูลชุดนี้ถูกนับรวมอยู่
+            if (isset($ordered[$month]) && empty($ordered[$month]['untagged'])) {
+                continue;
+            }
+
+            $ordered[$month] = [
+                'fiscal_year'   => $fiscalYear,
+                'period_month'  => $month,
+                'period_year'   => $period['period_year'],
+                'import_id'     => (int) $row->import_id,
+                'import_name'   => $row->file_name,
+                'untagged'      => true,
+                'period_source' => $period['source'],
+            ];
+        }
+
+        // เรียงตามรอบปีงบ (ต.ค. → ก.ย.) ให้ตรงกับที่แสดงผล
+        $sorted = [];
+        foreach (ReserveFundCalculation::fiscalMonths() as $month) {
+            if (isset($ordered[$month])) {
+                $sorted[$month] = $ordered[$month];
+            }
+        }
+
+        return $sorted;
     }
 
     /**
@@ -364,17 +498,16 @@ class ReserveFundController extends Controller
     {
         $rate = $percent !== null ? $percent / 100 : null;
 
-        $byMonth = $this->payrollImportsForFiscalYear($fiscalYear);
-        $importIds = array_map(fn (Import $i) => $i->id, array_values($byMonth));
+        $byMonth = $this->payrollPeriodsForFiscalYear($fiscalYear);
+        $periods = array_values($byMonth);
 
-        $tree = $this->buildDutyTree($this->queryRows($importIds), $rate);
+        $tree = $this->buildDutyTree($this->queryRows(null, $periods), $rate);
 
         $months = [];
         foreach (ReserveFundCalculation::fiscalMonths() as $month) {
-            /** @var Import|null $import */
-            $import = $byMonth[$month] ?? null;
+            $period = $byMonth[$month] ?? null;
 
-            if ($import === null) {
+            if ($period === null) {
                 $months[] = [
                     'period_month'    => $month,
                     'period_year'     => ReserveFundCalculation::calendarYearOf($fiscalYear, $month),
@@ -391,20 +524,20 @@ class ReserveFundController extends Controller
                 continue;
             }
 
-            $agg = $this->aggregate($import->id);
-            $period = $this->periodOf($import);
+            // แยกตามงวดจริงในไฟล์ ไม่ใช่ทั้งชุดข้อมูล
+            $agg = $this->aggregate(null, [$period]);
 
             $months[] = [
                 'period_month'    => $month,
                 'period_year'     => $period['period_year'],
                 'period_label'    => ReserveFundCalculation::monthLabel($month),
                 'has_data'        => true,
-                'import_id'       => $import->id,
-                'import_name'     => $import->file_name,
+                'import_id'       => $period['import_id'],
+                'import_name'     => $period['import_name'],
                 'income_base'     => round($agg['total_income_base'], 2),
                 'total_reserve'   => $rate !== null ? round($agg['total_income_base'] * $rate, 2) : null,
                 'total_employees' => $agg['total_employees'],
-                'period_source'   => $period['source'],
+                'period_source'   => $period['period_source'],
             ];
         }
 
@@ -428,7 +561,7 @@ class ReserveFundController extends Controller
                     fn ($m) => $m['period_month'],
                     array_filter($months, fn ($m) => ! $m['has_data'])
                 )),
-                'import_ids'        => $importIds,
+                'import_ids'        => array_values(array_filter(array_column($periods, 'import_id'))),
                 'saved'             => $saved ? [
                     'id'                => $saved->id,
                     'percent'           => (float) $saved->percent,
@@ -494,10 +627,10 @@ class ReserveFundController extends Controller
         $percent = (float) $validated['percent'];
         $rate = $percent / 100;
 
-        $byMonth = $this->payrollImportsForFiscalYear($fiscalYear);
-        $importIds = array_map(fn (Import $i) => $i->id, array_values($byMonth));
+        $byMonth = $this->payrollPeriodsForFiscalYear($fiscalYear);
+        $periods = array_values($byMonth);
 
-        $aggregate = $this->aggregate($importIds);
+        $aggregate = $this->aggregate(null, $periods);
 
         if ($aggregate['total_employees'] === 0) {
             return response()->json([
@@ -518,7 +651,7 @@ class ReserveFundController extends Controller
         }
 
         $userId = $request->user()?->id;
-        $lastImportId = $importIds === [] ? null : $importIds[array_key_last($importIds)];
+        $lastImportId = $periods === [] ? null : $periods[array_key_last($periods)]['import_id'];
 
         $calculation = ReserveFundCalculation::updateOrCreate(
             [
@@ -592,7 +725,7 @@ class ReserveFundController extends Controller
 
         $import = $importId ? Import::find($importId) : null;
 
-        $rows = $this->queryRows($importId);
+        $rows = $this->queryRows($importId === null ? null : [$importId]);
 
         $tree = $this->buildDutyTree($rows, $rate);
         $dutyList = $tree['duties'];
@@ -694,7 +827,14 @@ class ReserveFundController extends Controller
         $periodMonth = (int) $validated['period_month'];
         $periodYear = ReserveFundCalculation::calendarYearOf($fiscalYear, $periodMonth);
 
-        $aggregate = $this->aggregate($importId);
+        // บันทึกรายงวด — ต้องคำนวณเฉพาะงวดนั้น
+        // ถ้าไฟล์เดียวมีหลายเดือน การรวมทั้งชุดข้อมูลจะทำให้ยอดงวดซ้ำกัน
+        $periods = $this->payrollPeriodsForFiscalYear($fiscalYear);
+        $period = $periods[$periodMonth] ?? null;
+
+        $aggregate = $period !== null
+            ? $this->aggregate(null, [$period])
+            : $this->aggregate($importId === null ? null : [$importId]);
 
         if ($aggregate['total_employees'] === 0) {
             return response()->json([
@@ -724,7 +864,7 @@ class ReserveFundController extends Controller
                 'period_month' => $periodMonth,
             ],
             [
-                'import_id'         => $importId,
+                'import_id'         => $period['import_id'] ?? $importId,
                 'period_year'       => $periodYear,
                 'percent'           => $percent,
                 'total_income_base' => round($aggregate['total_income_base'], 2),

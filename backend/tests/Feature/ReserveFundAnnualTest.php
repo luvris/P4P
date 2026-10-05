@@ -109,6 +109,86 @@ class ReserveFundAnnualTest extends TestCase
             ->assertJsonPath('summary.months_present', 2);
     }
 
+    /**
+     * จำนวนบุคลากรต้องนับคนไม่ซ้ำข้ามทุกงวด
+     *
+     * คนเดิมมีเงินเดือน 8 งวด = 8 แถวใน payroll ถ้านับแถวจะได้ 8 คน
+     * แต่ทะเบียนบุคลากรมีคนนี้คนเดียว
+     */
+    public function test_annual_headcount_counts_each_person_once_across_periods(): void
+    {
+        $this->makeImport(10000, ['fiscal_year' => 2569, 'period_month' => 10, 'period_year' => 2568]);
+        $this->makeImport(20000, ['fiscal_year' => 2569, 'period_month' => 11, 'period_year' => 2568]);
+        $this->makeImport(30000, ['fiscal_year' => 2569, 'period_month' => 12, 'period_year' => 2568]);
+
+        $response = $this->annual(2569, 3)->assertOk();
+
+        // ยอดเงินยังรวมทุกงวด แต่จำนวนคนต้องเป็น 1
+        $this->assertEqualsWithDelta(60000, $response->json('summary.total_income_base'), 0.001);
+        $this->assertSame(1, $response->json('summary.total_employees'));
+
+        // รายงวดยังรายงวดนับคนของงวดนั้น
+        $months = collect($response->json('summary.months'))->keyBy('period_month');
+        $this->assertSame(1, $months[10]['total_employees']);
+        $this->assertSame(1, $months[12]['total_employees']);
+
+        // ตารางแยกภารกิจ/งาน ต้องไม่นับคนเดียวซ้ำหลายงวด
+        $this->assertSame(1, $response->json('data.duties.0.employee_count'));
+        $this->assertSame(1, $response->json('data.duties.0.works.0.employee_count'));
+    }
+
+    /**
+     * ไฟล์เดียวที่มีหลายเดือนปนกัน ต้องถูกแยกเป็นรายงวดจริง
+     *
+     * เดิมระบบถือว่า 1 ไฟล์ = 1 งวด ทำให้ยอดทั้งปีไปตกอยู่งวดเดียว
+     */
+    public function test_one_import_containing_many_months_is_split_by_its_own_periods(): void
+    {
+        // ไฟล์เดียว มี 3 งวดปนกัน (แต่ละงวดคนละเงิน)
+        $import = Import::create([
+            'file_name'   => 'payroll-year.xlsx',
+            'file_path'   => 'imports/payroll.xlsx',
+            'file_type'   => 'xlsx',
+            'uploaded_by' => $this->user->id,
+            'status'      => 'completed',
+            'import_type' => 'payroll',
+            // ไม่ระบุงวดที่ระดับไฟล์ — งวดอยู่ที่ระดับแถวตามรูปแบบใหม่
+        ]);
+
+        foreach ([[10, 10000], [11, 20000], [12, 30000]] as [$month, $salary]) {
+            Payroll::create([
+                'import_id'    => $import->id,
+                'citizen_id'   => '1111111111111',
+                'first_name'   => 'สมชาย',
+                'last_name'    => 'ใจดี',
+                'fiscal_year'  => 2569,
+                'period_month' => $month,
+                'salary'       => $salary,
+                'total_income' => $salary,
+            ]);
+        }
+
+        $response = $this->annual(2569, 3)->assertOk();
+
+        $this->assertSame(3, $response->json('summary.months_present'));
+
+        $months = collect($response->json('summary.months'))->keyBy('period_month');
+
+        $this->assertEqualsWithDelta(10000, $months[10]['income_base'], 0.001);
+        $this->assertEqualsWithDelta(20000, $months[11]['income_base'], 0.001);
+        $this->assertEqualsWithDelta(30000, $months[12]['income_base'], 0.001);
+
+        // คนเดียวกัน 3 งวด แต่นับเป็นคนเดียว
+        foreach ([10, 11, 12] as $month) {
+            $this->assertSame(1, $months[$month]['total_employees']);
+        }
+
+        $this->assertSame(1, $response->json('summary.total_employees'));
+
+        // ยอดรวมทั้งปียังรวมทุกงวด
+        $this->assertEqualsWithDelta(60000, $response->json('summary.total_income_base'), 0.001);
+    }
+
     public function test_annual_reports_all_twelve_periods_with_completeness(): void
     {
         $this->makeImport(10000, ['fiscal_year' => 2569, 'period_month' => 10, 'period_year' => 2568]);
