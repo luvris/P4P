@@ -358,6 +358,79 @@ class ReserveFundController extends Controller
         ];
     }
 
+    /**
+     * ยอดเงินที่นำเข้าแล้ว แต่ไม่เข้าฐานคำนวณเพราะผูกกับทะเบียนบุคลากรไม่ได้
+     *
+     * แสดงคู่กับยอดรวม เพื่อให้เห็นว่า “เงินในไฟล์” กับ “เงินที่นับได้”
+     * ต่างกันเท่าไร — ปกติต้องเป็น 0 ถ้าไม่ใช่แปลว่ามีคนที่ยังไม่มีในทะเบียน
+     *
+     * @param  array<int, array{fiscal_year:int, period_month:int}>|null  $periods
+     * @return array{rows:int, total_income:float, by_reason:array<string,int>, samples:array<int, array>}|null
+     */
+    protected function unlinkedSummary(?array $periods): ?array
+    {
+        if ($periods === null || $periods === []) {
+            return null;
+        }
+
+        $query = DB::table('payrolls as p')
+            ->leftJoin('imports as i', 'i.id', '=', 'p.import_id')
+            ->where(function ($q) {
+                $q->whereNull('p.citizen_id')->orWhere('p.citizen_id', '=', '');
+            });
+
+        $query->where(function ($q) use ($periods) {
+            foreach ($periods as $period) {
+                $q->orWhere(function ($sub) use ($period) {
+                    $sub->where($this->payrollFiscalYearColumn(), $period['fiscal_year'])
+                        ->where($this->payrollPeriodMonthColumn(), $period['period_month']);
+
+                    if (! empty($period['import_id'])) {
+                        $sub->where('p.import_id', $period['import_id']);
+                    }
+                });
+            }
+        });
+
+        $rows = (clone $query)->get([
+            'p.first_name', 'p.last_name', 'p.citizen_id', 'p.total_income',
+        ]);
+
+        if ($rows->isEmpty()) {
+            return null;
+        }
+
+        $total = 0.0;
+        $samples = [];
+        $seen = [];
+
+        foreach ($rows as $row) {
+            $total += (float) ($row->total_income ?? 0);
+
+            // คนเดียวกันหลายงวด = หนึ่งรายการ ไม่ใช่หลายรายการ
+            $key = ($row->citizen_id ?? '') . '|' . ($row->first_name ?? '') . '|' . ($row->last_name ?? '');
+
+            if (isset($seen[$key]) || count($samples) >= 20) {
+                continue;
+            }
+
+            $seen[$key] = true;
+            $samples[] = [
+                'first_name'   => $row->first_name,
+                'last_name'    => $row->last_name,
+                'citizen_id'   => $row->citizen_id,
+                'total_income' => (float) ($row->total_income ?? 0),
+                'reason'       => 'no_citizen_id',
+            ];
+        }
+
+        return [
+            'rows'         => $rows->count(),
+            'total_income' => round($total, 2),
+            'by_reason'    => ['no_citizen_id' => $rows->count(), 'not_in_registry' => 0],
+            'samples'      => $samples,
+        ];
+    }
 
     /**
      * งวดของ import — ใช้ค่าที่บันทึกไว้ ถ้าไม่มีให้อนุมานจากวันที่อัปโหลด
@@ -562,6 +635,7 @@ class ReserveFundController extends Controller
                     array_filter($months, fn ($m) => ! $m['has_data'])
                 )),
                 'import_ids'        => array_values(array_filter(array_column($periods, 'import_id'))),
+                'unlinked'          => $this->unlinkedSummary($periods),
                 'saved'             => $saved ? [
                     'id'                => $saved->id,
                     'percent'           => (float) $saved->percent,

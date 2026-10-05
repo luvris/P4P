@@ -98,6 +98,23 @@ class ImportController extends Controller
             ->values()
             ->all();
 
+        // สรุปยอดที่นำเข้าแล้วแต่ไม่เข้าฐานเงินสำรอง (เลขบัตรว่าง/ไม่ตรงทะเบียน)
+        $unlinked = collect($import->row_errors ?? [])
+            ->firstWhere('type', 'unlinked_summary');
+
+        $unlinkedSummary = $unlinked ? [
+            'rows'         => (int) $unlinked['unlinked_rows'],
+            'total_income' => (float) $unlinked['unlinked_total_income'],
+            'by_reason'    => $unlinked['by_reason'] ?? [],
+            'samples'      => $unlinked['samples'] ?? [],
+            'message'      => sprintf(
+                'นำเข้าสำเร็จ %d คน-งวด แต่มี %d คน-งวด รวม %s บาท ที่ยังไม่ถูกนับในฐานเงินสำรอง เพราะยังไม่มีเลขบัตรประชาชนหรือผูกกับทะเบียนบุคลากรไม่ได้',
+                (int) $import->success_rows,
+                (int) $unlinked['unlinked_rows'],
+                number_format((float) $unlinked['unlinked_total_income'], 2)
+            ),
+        ] : null;
+
         $warning = null;
         if ($missingIncomeFields !== []) {
             $warning = 'ไม่พบคอลัมน์ ' . implode(', ', $missingIncomeFields)
@@ -111,6 +128,7 @@ class ImportController extends Controller
             'missing_income_fields' => $missingIncomeFields,
             'link_warnings' => $linkWarnings,
             'link_warning_count' => count($linkWarnings),
+            'unlinked_summary' => $unlinkedSummary,
             'warning' => $warning,
             'uploader' => [
                 'id' => $request->user()->id,

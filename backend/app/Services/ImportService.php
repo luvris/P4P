@@ -194,11 +194,16 @@ class ImportService
             // เลขบัตรประชาชนที่พิมพ์ผิดจะทำให้คนนั้นถูกตัดออกจากเงินสำรองอย่างเงียบ ๆ
             $linkWarnings = $this->linkageInspector->inspect($insertedRows);
 
-            if ($linkWarnings !== []) {
-                Log::warning('Payroll import: พบแถวที่ผูกกับทะเบียนบุคลากรไม่ได้', [
-                    'import_id' => $import->id,
-                    'file_name' => $fileName,
-                    'count'     => count($linkWarnings),
+            // สรุปยอดที่จะหายไปจากฐานเงินสำรอง — เก็บไว้ให้ผู้ใช้เห็นทันทีที่นำเข้า
+            $unlinked = $this->linkageInspector->summarizeUnlinked($insertedRows);
+
+            if ($unlinked['rows'] > 0) {
+                Log::warning('Payroll import: มีแถวที่ไม่เข้าฐานเงินสำรอง', [
+                    'import_id'    => $import->id,
+                    'file_name'    => $fileName,
+                    'rows'         => $unlinked['rows'],
+                    'total_income' => $unlinked['total_income'],
+                    'by_reason'    => $unlinked['by_reason'],
                 ]);
             }
 
@@ -216,10 +221,29 @@ class ImportService
 
             // row_errors ไม่อยู่ใน $fillable ของ Import (ไม่แก้ model เดิม)
             // จึงเขียนตรงผ่าน query builder เฉพาะ import แถวนี้
-            if ($rowErrors !== []) {
+            // แนบยอดที่หายไปจากฐานเงินสำรองไว้ในรายการเดียวกัน
+            $storedErrors = array_slice($rowErrors, 0, self::MAX_ROW_ERRORS);
+
+            if ($unlinked['rows'] > 0) {
+                $storedErrors[] = [
+                    'row'          => 0,
+                    'type'         => 'unlinked_summary',
+                    'unlinked_rows'         => $unlinked['rows'],
+                    'unlinked_total_income' => $unlinked['total_income'],
+                    'by_reason'    => $unlinked['by_reason'],
+                    'samples'      => $unlinked['samples'],
+                    'error'        => sprintf(
+                        'มี %d คน-งวด รวม %s บาท ที่นำเข้าสำเร็จแต่ไม่ถูกนับในฐานเงินสำรอง เพราะผูกกับทะเบียนบุคลากรไม่ได้',
+                        $unlinked['rows'],
+                        number_format($unlinked['total_income'], 2)
+                    ),
+                ];
+            }
+
+            if ($storedErrors !== []) {
                 DB::table('imports')
                     ->where('id', $import->id)
-                    ->update(['row_errors' => json_encode($rowErrors, JSON_UNESCAPED_UNICODE)]);
+                    ->update(['row_errors' => json_encode($storedErrors, JSON_UNESCAPED_UNICODE)]);
             }
 
             return $import->fresh();

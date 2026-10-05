@@ -159,6 +159,76 @@ class PayrollLinkageInspector
     }
 
     /**
+     * สรุปแถวที่ "ผูกกับทะเบียนบุคลากรไม่ได้" พร้อมยอดเงินที่จะหายไป
+     *
+     * แถวพวกนี้ถูกนำเข้า `payrolls` สำเร็จ แต่ฐานเงินสำรองนับไม่ได้
+     * เพราะระบบ match ด้วยเลขบัตรประชาชน — ถ้าไม่รายงาน ผู้ใช้จะเห็นว่า
+     * “นำเข้าสำเร็จ” ทั้งที่เงินกลับไม่เข้าฐานคำนวณ
+     *
+     * @param  array<int, array>  $rows  แถวที่นำเข้าจริง
+     * @return array{rows:int, total_income:float, by_reason:array<string, int>, samples:array<int, array>}
+     */
+    public function summarizeUnlinked(array $rows): array
+    {
+        $employees = Employee::limit(self::POOL_LIMIT)->get();
+        $byCitizenId = [];
+
+        foreach ($employees as $employee) {
+            $citizenId = $this->digits($employee->citizen_id);
+            if ($citizenId !== '') {
+                $byCitizenId[$citizenId] = true;
+            }
+        }
+
+        $unlinked = 0;
+        $totalIncome = 0.0;
+        $byReason = [
+            'no_citizen_id' => 0,   // ไม่มีเลขบัตร และเดาจากชื่อไม่ได้
+            'not_in_registry' => 0, // มีเลขบัตร แต่ไม่ตรงกับใครในทะเบียน
+        ];
+        $samples = [];
+        $seen = [];
+
+        foreach ($rows as $index => $row) {
+            $citizenId = $this->digits($row['citizen_id'] ?? null);
+
+            if ($citizenId === '') {
+                $reason = 'no_citizen_id';
+            } elseif (isset($byCitizenId[$citizenId])) {
+                continue;   // ผูกได้ → ไม่ต้องรายงาน
+            } else {
+                $reason = 'not_in_registry';
+            }
+
+            $unlinked++;
+            $byReason[$reason]++;
+            $totalIncome += (float) ($row['total_income'] ?? 0);
+
+            // กันแถวซ้ำของคนเดิม (หลายงวด) ไม่ให้นับเกินจริง
+            $key = ($row['citizen_id'] ?? '') . '|' . ($row['first_name'] ?? '') . '|' . ($row['last_name'] ?? '');
+
+            if (! isset($seen[$key]) && count($samples) < 20) {
+                $seen[$key] = true;
+                $samples[] = [
+                    'row'         => $index + 2,
+                    'first_name'  => $row['first_name'] ?? '',
+                    'last_name'   => $row['last_name'] ?? '',
+                    'citizen_id'  => $row['citizen_id'] ?? '',
+                    'total_income' => (float) ($row['total_income'] ?? 0),
+                    'reason'      => $reason,
+                ];
+            }
+        }
+
+        return [
+            'rows'         => $unlinked,
+            'total_income' => round($totalIncome, 2),
+            'by_reason'    => $byReason,
+            'samples'      => $samples,
+        ];
+    }
+
+    /**
      * สร้างคำเตือนของแถวหนึ่ง ๆ (คืน null ถ้าไม่เข้าเงื่อนไขใดเลย)
      */
     protected function buildWarning(

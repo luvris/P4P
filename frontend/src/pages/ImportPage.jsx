@@ -16,6 +16,7 @@ const ImportPage = () => {
     const [previewData, setPreviewData] = useState([]);
     const [warning, setWarning] = useState('');
     const [linkWarnings, setLinkWarnings] = useState([]);
+    const [unlinkedSummary, setUnlinkedSummary] = useState(null);
 
     // งวดของไฟล์ payroll — ใช้คำนวณเงินสำรองรายปี (เริ่มที่เดือนปัจจุบัน)
     const { fiscalYear } = useFiscalYear();
@@ -64,6 +65,7 @@ const ImportPage = () => {
             setPreviewData(result.preview || []);
             setWarning(result.warning || '');
             setLinkWarnings(result.link_warnings || []);
+            setUnlinkedSummary(result.unlinked_summary || null);
 
             if (result.warning) {
                 toast(result.warning, { icon: '⚠️' });
@@ -149,6 +151,43 @@ const ImportPage = () => {
                         <div className="flex items-start gap-2 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800">
                             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                             <span>{warning}</span>
+                        </div>
+                    )}
+
+                    {unlinkedSummary && unlinkedSummary.rows > 0 && (
+                        <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4">
+                            <div className="flex items-center gap-2 text-sm font-medium text-amber-900">
+                                <AlertTriangle className="h-4 w-4 shrink-0" />
+                                <span>
+                                    เงิน {unlinkedSummary.total_income.toLocaleString('th-TH', { minimumFractionDigits: 2 })} บาท
+                                    ของ {unlinkedSummary.rows.toLocaleString()} คน-งวด
+                                    ยังไม่ถูกนับในฐานเงินสำรอง
+                                </span>
+                            </div>
+                            <p className="mt-1 text-xs text-amber-800">
+                                ข้อมูลถูกนำเข้าเรียบร้อยแล้ว แต่ต้องมีเลขบัตรประชาชนที่ตรงกับทะเบียนบุคลากร
+                                จึงจะถูกนับ — กรุณาส่งไฟล์นี้ไปที่เมนู “นำเข้าข้อมูลบุคลากร” อีกครั้ง หรือแก้เลขบัตรในไฟล์ให้ถูกต้อง
+                            </p>
+                            {unlinkedSummary.samples?.length > 0 && (
+                                <details className="mt-2">
+                                    <summary className="cursor-pointer text-xs font-medium text-amber-900">
+                                        ดูรายชื่อ ({unlinkedSummary.rows.toLocaleString()} รายการ)
+                                    </summary>
+                                    <ul className="mt-2 max-h-56 space-y-1 overflow-y-auto">
+                                        {unlinkedSummary.samples.map((item, i) => (
+                                            <li
+                                                key={i}
+                                                className="rounded-lg border border-amber-200 bg-white px-3 py-1.5 text-xs text-gray-700"
+                                            >
+                                                {item.first_name} {item.last_name}
+                                                <span className="ml-2 text-gray-500">
+                                                    {Number(item.total_income).toLocaleString('th-TH', { minimumFractionDigits: 2 })} บาท
+                                                </span>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </details>
+                            )}
                         </div>
                     )}
 

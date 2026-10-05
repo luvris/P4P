@@ -267,6 +267,9 @@ const ReserveFundPage = () => {
 
     const hasData = (summary?.total_employees ?? 0) > 0;
 
+    // เงินที่อยู่ในไฟล์แต่ไม่เข้าฐานคำนวณ (ยังไม่มี/ไม่ตรงเลขบัตรประชาชน)
+    const unlinked = summary?.unlinked ?? null;
+
     return (
         <div className="max-w-7xl mx-auto space-y-4">
             {/* Header */}
@@ -676,6 +679,45 @@ const ReserveFundPage = () => {
                     </div>
                 </div>
             </div>
+
+            {/* เงินที่นำเข้าแล้ว แต่ไม่เข้าฐานคำนวณ — ต้องเห็นให้ชัดก่อนสรุปยอด */}
+            {unlinked && unlinked.rows > 0 && (
+                <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 print:hidden">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-amber-900">
+                        <AlertTriangle className="w-4 h-4 shrink-0" />
+                        <span>
+                            มีเงินที่ยังไม่ถูกนับในฐานคำนวณ{' '}
+                            {formatMoney(unlinked.total_income)} บาท
+                            ({unlinked.rows.toLocaleString()} คน-งวด)
+                        </span>
+                    </div>
+                    <p className="mt-1 text-xs text-amber-800">
+                        แถวเหล่านี้อยู่ในไฟล์และนำเข้าเรียบร้อยแล้ว แต่ยังไม่มีเลขบัตรประชาชนที่ตรงกับทะเบียนบุคลากร
+                        จึงไม่ถูกนับ — ยอดฐานรายรับด้านบนจึงต่ำกว่าเงินจริงในไฟล์
+                        กรุณานำเข้าข้อมูลบุคลากรให้ครบก่อนสรุปยอด
+                    </p>
+                    {unlinked.samples?.length > 0 && (
+                        <details className="mt-2">
+                            <summary className="cursor-pointer text-xs font-medium text-amber-900">
+                                ดูรายชื่อ ({unlinked.rows.toLocaleString()} รายการ)
+                            </summary>
+                            <ul className="mt-2 max-h-56 space-y-1 overflow-y-auto">
+                                {unlinked.samples.map((item, i) => (
+                                    <li
+                                        key={i}
+                                        className="rounded-lg border border-amber-200 bg-white px-3 py-1.5 text-xs text-gray-700"
+                                    >
+                                        {item.first_name} {item.last_name}
+                                        <span className="ml-2 text-gray-500">
+                                            {formatMoney(item.total_income)} บาท
+                                        </span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </details>
+                    )}
+                </div>
+            )}
 
             {/* Charts */}
             {loading ? (
