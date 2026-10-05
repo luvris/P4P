@@ -2,6 +2,10 @@
 .freebuff/
 
 # โฟลเดอร์ชั่วคราวทั่วไป
+# สำคัญ: PHP ของเครื่องนี้ตั้ง upload_tmp_dir = C:\Users\gkwon\P4P\temp
+# ถ้าโฟลเดอร์นี้หาย การอัปโหลดไฟล์จะล้มเหลวทันทีด้วย
+# "The file failed to upload." — แม้ตัวแอปจะไม่ได้แตะโฟลเดอร์นี้เลย
+# ให้สร้าง `mkdir temp` ไว้เสมอ (ถูก ignore จึงไม่ถูก commit)
 temp/
 *.log
 
