@@ -25,6 +25,11 @@ class Employee extends Model
         'work_id',
         'status_id',
         'bank_account',
+        'bank_account_2',
+        // ข้อมูลจากไฟล์เงินเดือนรูปแบบใหม่ (งวดล่าสุดของแต่ละคน)
+        'latest_salary',
+        'latest_period_year',
+        'latest_period_month',
         'note',
         'created_by',
         'updated_by',
@@ -48,6 +53,8 @@ class Employee extends Model
 
     protected $casts = [
         'salary' => 'decimal:2',
+        'latest_salary' => 'decimal:2',
+        'latest_period_month' => 'integer',
         'birth_date' => 'date',
     ];
 
