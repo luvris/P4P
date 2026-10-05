@@ -42,15 +42,6 @@ class ImportTemplateTest extends TestCase
         return $path;
     }
 
-    private function dutyTemplatePath(): string
-    {
-        $path = tempnam(sys_get_temp_dir(), 'template') . '.xlsx';
-        app(ImportTemplateService::class)->writeDutyAssignmentTemplate($path);
-        $this->tempFiles[] = $path;
-
-        return $path;
-    }
-
     private function user(string $role, string $username): User
     {
         return User::create([
@@ -159,16 +150,6 @@ class ImportTemplateTest extends TestCase
         }
     }
 
-    public function test_duty_template_has_no_missing_columns(): void
-    {
-        $path = $this->dutyTemplatePath();
-
-        $rows = (new DutyAssignmentXlsxParser())->parse($path);
-
-        $this->assertNotEmpty($rows);
-        $this->assertNotNull($rows[0]['pid']);
-    }
-
     // ============ endpoint ============
 
     public function test_finance_can_download_the_payroll_template(): void
@@ -184,13 +165,6 @@ class ImportTemplateTest extends TestCase
     {
         $this->actingAs($this->user('hr', 'tpl_hr'))
             ->get('/api/hr/imports/template')
-            ->assertOk();
-    }
-
-    public function test_hr_can_download_the_duty_template(): void
-    {
-        $this->actingAs($this->user('hr', 'tpl_hr2'))
-            ->get('/api/hr/duty-assignment-imports/template')
             ->assertOk();
     }
 

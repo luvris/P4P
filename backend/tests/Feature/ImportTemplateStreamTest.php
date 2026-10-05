@@ -78,15 +78,6 @@ class ImportTemplateStreamTest extends TestCase
         $this->assertSame([], $result['warnings']);
     }
 
-    public function test_streamed_duty_template_parses_without_errors(): void
-    {
-        $path = $this->save($this->capture($this->controller()->dutyAssignment()));
-
-        $rows = (new \App\Services\Parsers\DutyAssignmentXlsxParser())->parse($path);
-
-        $this->assertNotEmpty($rows);
-    }
-
     public function test_download_uses_a_thai_file_name(): void
     {
         $disposition = (string) $this->controller()->payroll()

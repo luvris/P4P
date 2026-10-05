@@ -78,48 +78,10 @@ class ImportTemplateService
         return $spreadsheet;
     }
 
-    /**
-     * สร้างไฟล์ต้นแบบการอยู่ภารกิจ (PID / DUTY / PARTY / AGENCIES)
-     */
-    public function dutyAssignmentTemplate(): Spreadsheet
-    {
-        $spreadsheet = new Spreadsheet();
-        $sheet = $spreadsheet->getActiveSheet();
-        $sheet->setTitle('การอยู่ภารกิจ');
-
-        $columns = ['PID', 'DUTY', 'PARTY', 'AGENCIES'];
-        $sheet->fromArray($columns, null, 'A' . self::HEADER_ROW);
-        $this->styleHeader($sheet, count($columns));
-
-        $sheet->freezePane('A' . self::FIRST_DATA_ROW);
-        foreach ($columns as $i => $name) {
-            $sheet->getColumnDimension(Coordinate::stringFromColumnIndex($i + 1))
-                ->setWidth($this->dutyColumnWidth($name));
-        }
-
-        // แถวตัวอย่าง — ค่ามีรหัสนำหน้าได้ ระบบตัดออกให้เองตอนจับคู่
-        $sheet->fromArray([
-            ['59_กลุ่มงานการพยาบาลผู้ป่วยนอก', 'ภารกิจด้านการพยาบาล', 'กลุ่มงานการพยาบาลผู้ป่วยนอก', 'งานผู้ป่วยนอก'],
-            ['123', 'ภารกิจด้านการแพทย์', 'กลุ่มงานการแพทย์', 'งานอนุรักษ์ผู้ป่วย'],
-        ], null, 'A' . self::FIRST_DATA_ROW);
-
-        $this->addDutyInstructions($spreadsheet);
-        $spreadsheet->setActiveSheetIndex(0);
-
-        return $spreadsheet;
-    }
-
     /** เขียนไฟล์ต้นแบบลงดิสก์ — ใช้ในเทสต์และสคริปต์ (ดาวน์โหลดจริงใช้ php://temp) */
     public function writePayrollTemplate(string $path): string
     {
         (new XlsxWriter($this->payrollTemplate()))->save($path);
-
-        return $path;
-    }
-
-    public function writeDutyAssignmentTemplate(string $path): string
-    {
-        (new XlsxWriter($this->dutyAssignmentTemplate()))->save($path);
 
         return $path;
     }
@@ -290,16 +252,6 @@ class ImportTemplateService
         };
     }
 
-    protected function dutyColumnWidth(string $name): float
-    {
-        return match ($name) {
-            'PID'                     => 12,
-            'DUTY'                    => 30,
-            'PARTY', 'AGENCIES'       => 34,
-            default                   => 18,
-        };
-    }
-
     // ============ ชีตคำอธิบาย ============
 
     protected function addPayrollInstructions(Spreadsheet $spreadsheet): void
@@ -353,36 +305,6 @@ class ImportTemplateService
         $sheet->getColumnDimension('A')->setWidth(72);
     }
 
-    protected function addDutyInstructions(Spreadsheet $spreadsheet): void
-    {
-        $sheet = $spreadsheet->getSheetByName('วิธีใช้') ?? $spreadsheet->createSheet();
-        $sheet->setTitle('วิธีใช้');
-
-        $lines = [
-            ['แบบฟอร่มนำเข้าข้อมูลการอยู่ภารกิจของบุคลากร'],
-            [''],
-            ['ใช้ที่: เมนู บริหารงานบุคคล > นำเข้าข้อมูลการอยู่ภารกิจของบุคลากร'],
-            [''],
-            ['คอลัมน์'],
-            ['  • PID       — รหัสบุคลากร (ต้องตรงกับรหัสในระบบ)'],
-            ['  • DUTY      — ภารกิจ'],
-            ['  • PARTY     — กลุ่มงาน'],
-            ['  • AGENCIES  — งาน'],
-            [''],
-            ['PID และ DUTY เป็นคอลัมน์บังคับ ขาดแล้วระบบจะไม่รับไฟล์'],
-            [''],
-            ['หมายเหตุ'],
-            ['  • ค่าในไฟล์มีรหัสนำหน้าได้ เช่น "59_กลุ่มงาน..." ระบบจะตัดออกให้เอง'],
-            ['  • กลุ่มงาน/งานที่ยังไม่มีในระบบ จะถูกสร้างใหม่ให้อัตโนมัติ'],
-        ];
-
-        foreach ($lines as $i => $line) {
-            $sheet->setCellValue('A' . ($i + 1), $line[0]);
-        }
-
-        $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(14);
-        $sheet->getColumnDimension('A')->setWidth(72);
-    }
 
     /**
      * ยืนยันว่าไฟล์ที่สร้างได้อ่านได้จริงและไม่มีคอลัมน์สำคัญขาด

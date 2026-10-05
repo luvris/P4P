@@ -5,7 +5,6 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ImportController;
 use App\Http\Controllers\Api\HrImportController;
-use App\Http\Controllers\Api\DutyAssignmentImportController;
 use App\Http\Controllers\Api\ImportTemplateController;
 use App\Http\Controllers\Api\EmployeeController;
 use App\Http\Controllers\Api\ProfileController;
@@ -83,14 +82,6 @@ Route::middleware('auth:sanctum')->group(function () {
             // ดาวน์โหลดแบบฟอร์มกรอกข้อมูล — ไฟล์เดียวกับฝั่งการเงิน
             Route::get('/template', [ImportTemplateController::class, 'payroll']);
             Route::get('/template/columns', [ImportTemplateController::class, 'columns']);
-        });
-
-        // นำเข้าข้อมูลการอยู่ภารกิจของบุคลากร — แยกจาก HR Import เดิมทั้งหมด
-        Route::prefix('duty-assignment-imports')->group(function () {
-            Route::post('/preview', [DutyAssignmentImportController::class, 'preview']);
-            Route::post('/',        [DutyAssignmentImportController::class, 'store']);
-            Route::get('/',         [DutyAssignmentImportController::class, 'index']);
-            Route::get('/template', [ImportTemplateController::class, 'dutyAssignment']);
         });
 
         // เงินสำรอง (คำนวณจาก payroll — ต้องระบุเปอร์เซ็นต์เอง)

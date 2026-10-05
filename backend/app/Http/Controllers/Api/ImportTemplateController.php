@@ -33,18 +33,6 @@ class ImportTemplateController extends Controller
     }
 
     /**
-     * GET /api/hr/duty-assignment-imports/template
-     * แบบฟอร์มการอยู่ภารกิจ (PID / DUTY / PARTY / AGENCIES)
-     */
-    public function dutyAssignment(): StreamedResponse
-    {
-        return $this->stream(
-            $this->templates->dutyAssignmentTemplate(),
-            'แบบฟอร์มนำเข้าข้อมูลการอยู่ภารกิจ.xlsx'
-        );
-    }
-
-    /**
      * รายการคอลัมน์ของไฟล์ต้นแบบ (หน้าเว็บใช้แสดงคำอธิบาย)
      */
     public function columns(): \Illuminate\Http\JsonResponse
