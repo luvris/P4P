@@ -5,5 +5,6 @@
 temp/
 *.log
 
-# ไฟล์ตัวอย่างที่สคริปต์สร้างขึ้น (backend/scripts/make_sample_payroll.php)
+# ไฟล์ตัวอย่างที่สคริปต์สร้างขึ้น (backend/scripts/make_*_payroll.php)
 backend/sample_payroll_new_format.xlsx
+backend/sample_payroll_multi_period.xlsx
