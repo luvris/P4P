@@ -71,6 +71,8 @@ class ReserveFundAccumulationTest extends TestCase
             'first_name' => 'สมชาย',
             'last_name'  => 'ใจดี',
             'salary'     => $salary,
+            // ฐานคำนวณเงินสำรองใช้ยอดรวมรายรับทั้งหมดรายบุคคล
+            'total_income' => $salary,
         ]);
 
         return $import;

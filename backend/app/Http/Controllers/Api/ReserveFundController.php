@@ -20,12 +20,15 @@ class ReserveFundController extends Controller
     protected const ACTIVE_EMPLOYEE_STATUSES = ['ปฏิบัติงานอยู่'];
 
     /**
-     * นิพจน์ฐานคำนวณ = เงินเดือน + OT + เงินประจำตำแหน่ง + P4P
+     * นิพจน์ฐานคำนวณ = ยอดรวมรายรับทั้งหมดรายบุคคล
+     *
+     * ฝ่ายการเงินกำหนดให้ใช้ยอดรวมรายรับทั้งหมดของแต่ละคน ไม่ใช่ผลรวมเฉพาะ
+     * เงินเดือน/OT/พตส./P4P เพราะไฟล์รูปแบบใหม่มีรายรับอีกหลายช่อง
+     * (ค่าครองชีพ บ่าย-ดึก P4P โครงการคุณภาพ รายได้อื่น ฯลฯ)
      */
     protected function incomeBaseExpression(): string
     {
-        return 'COALESCE(p.salary, 0) + COALESCE(p.overtime, 0)'
-            . ' + COALESCE(p.position_allowance, 0) + COALESCE(p.p4p_income, 0)';
+        return 'COALESCE(p.total_income, 0)';
     }
 
     /**

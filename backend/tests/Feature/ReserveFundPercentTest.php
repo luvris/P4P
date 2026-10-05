@@ -56,7 +56,8 @@ class ReserveFundPercentTest extends TestCase
             'status'      => 'completed',
         ]);
 
-        // ฐานคำนวณ = 20000 + 3000 + 1500 + 5500 = 30000
+        // ฐานคำนวณเงินสำรอง = ยอดรวมรายรับทั้งหมดรายบุคคล (total_income) = 30000
+        // คอลัมน์ย่อย (เงินเดือน/OT/พตส./P4P) เก็บไว้ให้รายงานแจกแจง ไม่ได้เป็นฐานอีกต่อไป
         // net_income ตั้งค่าต่างออกไป เพื่อยืนยันว่าไม่ถูกใช้เป็นฐาน
         Payroll::create([
             'import_id'          => $this->import->id,
@@ -68,6 +69,7 @@ class ReserveFundPercentTest extends TestCase
             'position_allowance' => 1500,
             'p4p_income'         => 5500,
             'living_allowance'   => 1000,
+            'total_income'       => 30000,
             'net_income'         => 99999,
         ]);
     }
@@ -117,6 +119,7 @@ class ReserveFundPercentTest extends TestCase
             'first_name' => 'สมหญิง',
             'last_name'  => 'รักดี',
             'salary'     => 40000,
+            'total_income' => 40000,
         ]);
 
         $this->actingAs($this->user)
@@ -143,6 +146,7 @@ class ReserveFundPercentTest extends TestCase
             'first_name' => 'สมปอง',
             'last_name'  => 'เรียบดี',
             'salary'     => 50000,
+            'total_income' => 50000,
         ]);
 
         $this->actingAs($this->user)
@@ -159,6 +163,7 @@ class ReserveFundPercentTest extends TestCase
             'first_name' => 'ไม่ทราบ',
             'last_name'  => 'ชื่อ',
             'salary'     => 70000,
+            'total_income' => 70000,
         ]);
 
         $this->actingAs($this->user)
@@ -177,6 +182,7 @@ class ReserveFundPercentTest extends TestCase
             'first_name' => null,
             'last_name'  => null,
             'salary'     => 20000,
+            'total_income' => 20000,
             'net_income' => 20000,
         ]);
 

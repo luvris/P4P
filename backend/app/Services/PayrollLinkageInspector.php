@@ -28,6 +28,72 @@ class PayrollLinkageInspector
     protected const POOL_LIMIT = 5000;
 
     /**
+     * เติมเลขบัตรประชาชนให้แถวที่ไม่มี โดยหาจากทะเบียนบุคลากรด้วยชื่อ-นามสกุล
+     *
+     * ใช้กับไฟล์ payroll รูปแบบใหม่ที่ไม่มีคอลัมน์เลขบัตรประชาชนเลย —
+     * ถ้าไม่ derive ทุกแถวจะถูกถือเป็น "แถวรวมยอด" และถูกข้ามทั้งไฟล์
+     *
+     * เติมเฉพาะเมื่อชื่อ-นามสกุล match บุคลากรในทะเบียนตัวเดียวพอดี
+     * (match หลายคน = ชื่อซ้ำ จะเดาไม่ได้ จึงปล่อยว่างเพื่อไม่ผูกเลขบัตรผิดคน)
+     *
+     * @param  array<int, array>  $rows  แก้ในที่ (by reference) แล้วคืนออกมา
+     * @return array<int, array>
+     */
+    public function deriveCitizenIdsByName(array $rows): array
+    {
+        $hasAnyCitizenId = false;
+
+        foreach ($rows as $row) {
+            if (trim((string) ($row['citizen_id'] ?? '')) !== '') {
+                $hasAnyCitizenId = true;
+                break;
+            }
+        }
+
+        // ไฟล์มีคอลัมน์เลขบัตรอยู่แล้ว → ไม่ต้อง derive (กันเติมทับเลขที่ไฟล์ให้มา)
+        if ($hasAnyCitizenId) {
+            return $rows;
+        }
+
+        $prefixes = $this->knownPrefixes(Employee::with('prefix:id,name')->limit(self::POOL_LIMIT)->get());
+
+        $byName = [];
+
+        Employee::query()
+            ->whereNotNull('citizen_id')
+            ->where('citizen_id', '!=', '')
+            ->limit(self::POOL_LIMIT)
+            ->get()
+            ->each(function ($employee) use (&$byName, $prefixes) {
+                $nameKey = $this->nameKey($employee->first_name, $employee->last_name, $prefixes);
+
+                if ($nameKey !== '') {
+                    $byName[$nameKey][] = $this->digits($employee->citizen_id);
+                }
+            });
+
+        foreach ($rows as $index => $row) {
+            if (trim((string) ($row['citizen_id'] ?? '')) !== '') {
+                continue;
+            }
+
+            $nameKey = $this->nameKey($row['first_name'] ?? null, $row['last_name'] ?? null, $prefixes);
+
+            if ($nameKey === '') {
+                continue;
+            }
+
+            $matches = array_unique($byName[$nameKey] ?? []);
+
+            if (count($matches) === 1) {
+                $rows[$index]['citizen_id'] = $matches[0];
+            }
+        }
+        
+        return $rows;
+    }
+
+    /**
      * @param  array<int, array>  $rows  แถว payroll ที่มีเลขบัตรประชาชนแล้ว
      * @return array<int, array>  คำเตือน [{row, type, reason, error, ...}]
      */

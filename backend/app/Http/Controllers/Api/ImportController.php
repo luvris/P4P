@@ -7,6 +7,7 @@ use App\Models\Import;
 use App\Models\Payroll;
 use App\Models\ReserveFundCalculation;
 use App\Services\ImportService;
+use App\Services\Parsers\NewFormatPayrollParser;
 use App\Services\Parsers\XlsxParser;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -20,6 +21,22 @@ class ImportController extends Controller
     /**
      * อัปโหลดไฟล์
      */
+    /**
+     * เลือก parser ตามรูปแบบไฟล์จริง
+     *
+     * ไฟล์รูปแบบใหม่ (39 คอลัมน์) ต้องใช้ NewFormatPayrollParser ไม่ใช่ XlsxParser เดิม
+     * มิฉะนั้น preview จะอ่านเลขบัตรประชาชนไม่ได้ และแสดงผลผิดคอลัมน์
+     */
+    protected function resolveParser(string $extension, string $fullPath)
+    {
+        if (in_array(strtolower($extension), ['xlsx', 'xls'], true)
+            && NewFormatPayrollParser::looksLikeNewFormat($fullPath)) {
+            return new NewFormatPayrollParser();
+        }
+
+        return new XlsxParser();
+    }
+
     public function store(Request $request)
     {
         $request->validate([
@@ -52,13 +69,14 @@ class ImportController extends Controller
 
         $file = $request->file('file');
         $originalName = $file->getClientOriginalName();
+        $extension = pathinfo($originalName, PATHINFO_EXTENSION);
 
         // เก็บไฟล์
         $path = $file->store('imports', 'local');
         $fullPath = Storage::disk('local')->path($path);
 
-        // อ่านข้อมูลก่อน import เพื่อส่ง preview
-        $parser = new XlsxParser();
+        // อ่านข้อมูลก่อน import เพื่อส่ง preview — ต้องใช้ parser ที่ตรงกับรูปแบบไฟล์
+        $parser = $this->resolveParser($extension, $fullPath);
         $previewData = $parser->parse($fullPath);
         $preview = array_slice($previewData, 0, 10);   // เอา 10 แถวแรก
 

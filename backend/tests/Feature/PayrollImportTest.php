@@ -199,4 +199,190 @@ class PayrollImportTest extends TestCase
 
         $this->assertSame([], $parser->missingReserveIncomeFields());
     }
+
+    /**
+     * เขียนไฟล์รูปแบบใหม่ (ส่งจากฝ่ายการเงิน ต.ค. 2569) —
+     * หัว "ชื่อ - นามสกุล" ครอบ คำนำหน้า/ชื่อ/นามสกุล, P4P 2 คอลัมน์,
+     * ปกส. 2 คอลัมน์ และไม่มีคอลัมน์เลขบัตรประชาชนเลย
+     */
+    private function writeNewFormatFile(): string
+    {
+        $header = [
+            'ชื่อ - นามสกุล', '', '', 'ประเภท', 'เลขที่บัญชี', 'เลขที่บัญชี', 'เงินเดือน', 'ตกเบิก',
+            'ง.บ.ส.ก.', 'ปจต.', 'ค่าครองชีพ', 'ไม่ทำเวชฯ', 'พตส.', 'ค่าOT',
+            'บ่าย-ดึก เงินงบประมาณ', 'บ่าย-ดึก เงินบำรุง', 'P4P ประจำเดือน', 'ค่าตอบแทน ปฏิบัติงาน covid 19',
+            'P4P โครงการคุณภาพ', 'รายได้อื่น', 'รวมรายรับทางตรง', 'ค่ารักษา', 'ค่าเล่าเรียน', 'คชจ.อบรม',
+            'ค่าเดินทาง', 'ต้นทุนจัดโครงการ', 'ประกันสังคม นายจ้าง', 'ประกันสังคม ผู้ประกันตน', 'ภาษี',
+            'กองทุนสำรอง เลี้ยงชีพ', 'รวมรายรับทางอ้อม', 'ยอดรวมรายรับทั้งหมด รายบุคคล', 'หมายเหตุ',
+        ];
+
+        $rows = [
+            // คำนำหน้า, ชื่อ, นามสกุล, ..., P4P ประจำเดือน(603) + P4P โครงการคุณภาพ(100) = 703,
+            // ปกส. นายจ้าง(875) + ผู้ประกันตน(875) = 1,750, กองทุนสำรอง(1,750)
+            ['นางสาว', 'ปปปป', 'ฟฟฟฟฟ', 'พนักงานราชการ', '521 0 00000 3', '5210000003', 26370, 0,
+                0, 0, 0, 0, 0, 0,
+                0, 0, 603, 0, 100, 0, 26973, 0, 0, 0, 0, 0, 875, 875, 0, 1750, 1750, 28723, ''],
+            // แถวรวมยอด — ไม่มีชื่อ ต้องถูกข้าม
+            ['', '', '', '', '', '', 263700, 0,
+                0, 0, 0, 0, 0, 0,
+                0, 0, 6030, 0, 1000, 0, 269730, 0, 0, 0, 0, 0, 8750, 8750, 0, 17500, 17500, 287230, ''],
+        ];
+
+        return $this->writePayrollFile($rows, $header);
+    }
+
+    public function test_new_format_with_merged_name_header_and_no_citizen_id_column_is_parsed(): void
+    {
+        // ทะเบียนบุคลากร — เลขบัตรจะถูก derive จากชื่อ-นามสกุล
+        EmployeeStatus::create(['name' => 'ปฏิบัติงานอยู่', 'sort_order' => 1]);
+        $statusId = EmployeeStatus::where('name', 'ปฏิบัติงานอยู่')->first()->id;
+
+        Employee::create([
+            'citizen_id' => '1509901045049',
+            'first_name' => 'ปปปป',
+            'last_name'  => 'ฟฟฟฟฟ',
+            'status_id'  => $statusId,
+        ]);
+
+        $path = $this->writeNewFormatFile();
+
+        $parser = new XlsxParser();
+        $data = $parser->parse($path);
+
+        // หัว merged "ชื่อ - นามสกุล" ต้องแยกชื่อ/นามสกุลได้ และไฟล์นี้ไม่มีเลขบัตรเลย
+        $this->assertSame('ปปปป', $data[0]['first_name']);
+        $this->assertSame('ฟฟฟฟฟ', $data[0]['last_name']);
+        $this->assertNull($data[0]['citizen_id']);
+
+        // คอลัมน์เลขบัญชีซ้ำ 2 คอลัมน์ (มีช่องว่าง / ไม่มี) ใช้คอลัมน์แรกได้เพราะ normalize แล้วเท่ากัน
+        $this->assertSame('5210000003', $data[0]['bank_account']);
+
+        // P4P 2 คอลัมน์ (603 + 100) และ ปกส. 2 คอลัมน์ (875 + 875)
+        // เก็บ "แยก" ตามคอลัมน์จริงในไฟล์ + มีผลรวมไว้ให้ฐานคำนวณเงินสำรอง
+        $this->assertSame(603.0, $data[0]['p4p_monthly']);
+        $this->assertSame(100.0, $data[0]['p4p_quality_project']);
+        $this->assertSame(703.0, $data[0]['p4p_income']);
+        $this->assertSame(875.0, $data[0]['social_security_employer']);
+        $this->assertSame(875.0, $data[0]['social_security_employee']);
+        $this->assertSame(1750.0, $data[0]['social_security']);
+
+        // "รวมรายรับทางตรง" = total_income, "ยอดรวมรายรับทั้งหมด รายบุคคล" = net_income
+        $this->assertSame(26973.0, $data[0]['total_income']);
+        $this->assertSame(28723.0, $data[0]['net_income']);
+        $this->assertSame(1750.0, $data[0]['provident_fund']);
+
+        $this->assertSame([], $parser->missingReserveIncomeFields());
+
+        $import = app(ImportService::class)->process($path, 'payroll-new.xlsx', $this->user->id);
+
+        // แถวรวมยอด (ไม่มีชื่อ) ต้องถูกข้าม ส่วนแถวบุคลากร derive เลขบัตรจากชื่อได้
+        $this->assertSame(2, $import->total_rows);
+        $this->assertSame(1, $import->success_rows);
+        $this->assertSame(1, $import->skipped_rows);
+
+        $payroll = Payroll::where('import_id', $import->id)->first();
+
+        $this->assertNotNull($payroll);
+        $this->assertSame('1509901045049', $payroll->citizen_id);
+
+        // คอลัมน์แยกถูกบันทึกลง DB จริง (HR ขอเก็บแยก ไม่รวมกัน)
+        $this->assertSame(603.0, (float) $payroll->p4p_monthly);
+        $this->assertSame(100.0, (float) $payroll->p4p_quality_project);
+        $this->assertSame(875.0, (float) $payroll->social_security_employer);
+        $this->assertSame(875.0, (float) $payroll->social_security_employee);
+
+        // ผลรวมยังคงอยู่สำหรับฐานคำนวณเงินสำรอง
+        $this->assertSame(703.0, (float) $payroll->p4p_income);
+    }
+
+    public function test_new_format_rows_without_a_matching_employee_are_still_imported(): void
+    {
+        // ไม่มีทะเบียนบุคลากรเลย — แถวที่มีชื่อต้องถูก import (เลขบัตรว่าง)
+        // ไม่ใช่ถูกข้ามทั้งไฟล์เหมือนแถวรวมยอด
+        $path = $this->writeNewFormatFile();
+
+        $import = app(ImportService::class)->process($path, 'payroll-new.xlsx', $this->user->id);
+
+        $this->assertSame(1, $import->success_rows);
+        $this->assertSame(1, $import->skipped_rows);
+
+        $payroll = Payroll::where('import_id', $import->id)->first();
+
+        $this->assertNotNull($payroll);
+        $this->assertSame('ปปปป', $payroll->first_name);
+        $this->assertNull($payroll->citizen_id);
+    }
+
+    public function test_two_row_headers_are_combined_for_matching(): void
+    {
+        // ไฟล์บางแบบมีหัว 2 แถว: หัวกลุ่มบน + หัวย่อยล่าง
+        $header = [
+            'ชื่อ - นามสกุล', '', '', 'P4P', '', 'ประกันสังคม', '',
+            'เงินเดือน', 'รวมรายรับทางตรง', 'ยอดรวมรายรับทั้งหมด รายบุคคล',
+        ];
+        $sub = [
+            'คำนำหน้า', 'ชื่อ', 'นามสกุล', 'ประจำเดือน', 'โครงการคุณภาพ', 'นายจ้าง', 'ผู้ประกันตน',
+            '', '', '',
+        ];
+
+        $rows = [
+            ['นางสาว', 'ปปปป', 'ฟฟฟฟฟ', 603, 100, 875, 875, 26370, 26973, 28723],
+        ];
+
+        // เขียนเองเพราะ writePayrollFile รองรับแถวหัวเดียว
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->fromArray($header, null, 'A1');
+        $sheet->fromArray($sub, null, 'A2');
+        $sheet->fromArray($rows, null, 'A3');
+
+        $path = tempnam(sys_get_temp_dir(), 'payroll') . '.xlsx';
+        (new XlsxWriter($spreadsheet))->save($path);
+        $this->tempFiles[] = $path;
+
+        $parser = new XlsxParser();
+        $data = $parser->parse($path);
+
+        $this->assertSame('ปปปป', $data[0]['first_name']);
+        $this->assertSame(603.0, $data[0]['p4p_monthly']);
+        $this->assertSame(100.0, $data[0]['p4p_quality_project']);
+        $this->assertSame(703.0, $data[0]['p4p_income']);
+        $this->assertSame(875.0, $data[0]['social_security_employer']);
+        $this->assertSame(875.0, $data[0]['social_security_employee']);
+    }
+
+    public function test_header_rows_above_the_table_are_skipped(): void
+    {
+        // ไฟล์จริงจาก HR มีแถวหัวเรื่อง/ทะเบียนคุมก่อนถึงหัวตารางจริง (เช่นแถว 1-5)
+        // parser ต้องหาแถวหัวตารางจริงเอง ไม่ใช่อ่านแถวแรกเสมอ
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+
+        $sheet->fromArray(['ระบบสารองความมนุษย์ทรัพยากร New', 'Edit Info.', 'พน.', null, 'Ktb Online', 'จังหวัดน่านรัฐ'], null, 'A1');
+        $sheet->fromArray(['ประจำเดือน มิถุนายน 2569'], null, 'A2');
+        $sheet->fromArray(['รงพยาบาลประชาชีอนุเคราะห์'], null, 'A3');
+        $sheet->fromArray([null, null, null, null, null, null, null, null, null, null, null, null, null, null, '(ค่าเงิน) รายชื่อมากางเงินเดือน'], null, 'A5');
+
+        $sheet->fromArray([
+            'ชื่อ - นามสกุล', '', '', 'ประเภท', 'เลขที่บัญชี', 'เลขที่บัญชี', 'เงินเดือน', 'คดเบิก',
+            'จ.บ.ส.ก.', 'ปจต.', 'ค่าครองชีพ', 'ไม่ทำเวชฯ', 'พตส.', 'ค่าOT',
+        ], null, 'A6');
+
+        $sheet->fromArray([
+            ['นางสาว', 'ปปปป', 'ฟฟฟฟฟ', 'พนักงานราชการ', '521 0 00000 3', '5210000003', 26370, 0, 0, 0, 0, 0, 0, 0],
+        ], null, 'A7');
+
+        $path = tempnam(sys_get_temp_dir(), 'payroll') . '.xlsx';
+        (new XlsxWriter($spreadsheet))->save($path);
+        $this->tempFiles[] = $path;
+
+        $parser = new XlsxParser();
+        $data = $parser->parse($path);
+
+        // แถวหัวเรื่องด้านบนต้องถูกข้าม เหลือเฉพาะแถวบุคลากร
+        $this->assertCount(1, $data);
+        $this->assertSame('ปปปป', $data[0]['first_name']);
+        $this->assertSame('ฟฟฟฟฟ', $data[0]['last_name']);
+        $this->assertSame(26370.0, $data[0]['salary']);
+    }
 }
