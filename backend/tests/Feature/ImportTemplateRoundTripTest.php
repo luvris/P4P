@@ -72,7 +72,8 @@ class ImportTemplateRoundTripTest extends TestCase
         $spreadsheet = IOFactory::load($path);
         $sheet = $spreadsheet->getActiveSheet();
 
-        $index = array_flip(NewFormatPayrollParser::TEMPLATE_COLUMNS);
+        // ตำแหน่งคอลัมน์ต้องอ่านจากไฟล์จริง เพราะคอลัมน์ที่ระบบเพิ่มอาจถูกยัดกลางไฟล์
+        $index = array_flip($sheet->toArray()[0]);
 
         // ผู้ใช้เขียนทับแถวตัวอย่าง (แถว 2) แล้วเพิ่มแถวของตัวเองต่อจากนั้น
         $citizens = ['1000000000001', '1000000000002'];

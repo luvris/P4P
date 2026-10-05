@@ -4,7 +4,6 @@ namespace Tests\Feature;
 
 use App\Services\ImportTemplateService;
 use App\Services\NewFormatEmployeeImportService;
-use App\Services\Parsers\DutyAssignmentXlsxParser;
 use App\Services\Parsers\NewFormatPayrollParser;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -51,6 +50,28 @@ class ImportTemplateTest extends TestCase
             'password' => bcrypt('secret-password'),
             'role'     => $role,
         ]);
+    }
+
+    /**
+     * ลำดับคอลัมน์ที่คาดหวัง — ภารกิจ/กลุ่มงาน/งาน ต้องอยู่ติดกับ ID CARD
+     * ไม่ใช่หลุดไปท้ายไฟล์หลังช่องหมายเหตุ
+     *
+     * @return array<int, string>
+     */
+    private function templateColumnsWithDutyAfterIdCard(): array
+    {
+        $columns = [];
+        $extras = ['ภารกิจ', 'กลุ่มงาน', 'งาน'];
+
+        foreach (NewFormatPayrollParser::TEMPLATE_COLUMNS as $name) {
+            $columns[] = $name;
+
+            if ($name === 'ID CARD') {
+                $columns = array_merge($columns, $extras);
+            }
+        }
+
+        return $columns;
     }
 
     public function test_payroll_template_is_recognised_as_the_new_format(): void
@@ -200,10 +221,7 @@ class ImportTemplateTest extends TestCase
         $response->assertOk()
             // 39 คอลัมน์เดิมยังอยู่ครบ ส่วนที่เหลือคือคอลัมน์ที่ผู้ดูแลระบบประกาศเพิ่ม
             ->assertJsonPath('data.payroll.base_columns', NewFormatPayrollParser::TEMPLATE_COLUMNS)
-            ->assertJsonPath('data.payroll.columns', array_merge(
-                NewFormatPayrollParser::TEMPLATE_COLUMNS,
-                ['ภารกิจ', 'กลุ่มงาน', 'งาน']
-            ))
+            ->assertJsonPath('data.payroll.columns', $this->templateColumnsWithDutyAfterIdCard())
             ->assertJsonPath('data.payroll.required', NewFormatPayrollParser::CRITICAL_COLUMNS);
     }
 }

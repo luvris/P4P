@@ -9,7 +9,8 @@ use Illuminate\Http\Request;
 /**
  * คอลัมน์เพิ่มเติมของไฟล์เงินเดือน
  *
- * ผู้ใช้ประกาศชื่อคอลัมน์ที่ต้องการเพิ่ม ระบบจะใส่คอลัมน์นั้นต่อท้ายไฟล์ต้นแบบ
+ * ผู้ใช้ประกาศชื่อคอลัมน์ที่ต้องการเพิ่ม ระบบจะใส่คอลัมน์นั้นลงไฟล์ต้นแบบ
+ * (ถ้าระบุ after_column จะยัดไว้ต่อจากคอลัมน์นั้น ถ้าไม่ระบุจะต่อท้ายไฟล์)
  * และอ่านค่าจากไฟล์ที่อัปโหลดมาเก็บไว้ใน payrolls.extra_data
  *
  * จัดการโดย admin เท่านั้น เพราะคอลัมน์ที่เพิ่มจะกระทบไฟล์ต้นแบบของทุกคน
@@ -97,6 +98,8 @@ class PayrollExtraColumnController extends Controller
                     ->ignore($ignoreId),
             ],
             'description' => ['nullable', 'string', 'max:255'],
+            // ชื่อคอลัมน์ที่ต้องการให้คอลัมน์นี้ต่อจาก — ว่าง = ต่อท้ายไฟล์
+            'after_column' => ['nullable', 'string', 'max:100'],
             'data_type'   => ['nullable', \Illuminate\Validation\Rule::in(PayrollExtraColumn::TYPES)],
             'is_active'   => ['nullable', 'boolean'],
             'sort_order'  => ['nullable', 'integer', 'min:0'],

@@ -73,7 +73,7 @@ class ImportTemplateService
         }
 
         $this->markRequiredColumns($sheet, $columns);
-        $this->addSampleRows($sheet, count($columns));
+        $this->addSampleRows($sheet, $columns);
 
         $this->addMonthReferenceSheet($spreadsheet);
         $this->addPayrollInstructions($spreadsheet);
@@ -181,10 +181,15 @@ class ImportTemplateService
 
     /**
      * แถวตัวอย่าง — ใช้ข้อมูลสมมติ ไม่ใช่ข้อมูลจริง
+     *
+     * ต้องเขียนตามลำดับคอลัมน์ที่ใช้จริงในไฟล์ เพราะคอลัมน์เพิ่มเติมอาจถูกยัดไว้
+     * กลางไฟล์ (เช่น ภารกิจที่ต่อจาก ID CARD) ไม่ใช่ต่อท้ายอย่างเดียว
+     *
+     * @param  array<int, string>  $columns
      */
-    protected function addSampleRows($sheet, int $columnCount): void
+    protected function addSampleRows($sheet, array $columns): void
     {
-        $last = Coordinate::stringFromColumnIndex($columnCount);
+        $last = Coordinate::stringFromColumnIndex(count($columns));
 
         $sheet->getStyle('A' . self::FIRST_DATA_ROW . ':' . $last . self::FIRST_DATA_ROW)
             ->getFill()->setFillType(Fill::FILL_SOLID)
@@ -193,17 +198,21 @@ class ImportTemplateService
         $sheet->getStyle('A' . self::FIRST_DATA_ROW . ':' . $last . self::FIRST_DATA_ROW)
             ->getBorders()->getOutline()->setBorderStyle(Border::BORDER_THIN);
 
-        $index = array_flip(NewFormatPayrollParser::TEMPLATE_COLUMNS);
+        $baseColumns = NewFormatPayrollParser::TEMPLATE_COLUMNS;
+        $index = array_flip($columns);
         $row = 1;
 
         for ($i = 0; $i < self::SAMPLE_ROWS; $i++) {
             $values = [];
 
-            foreach (NewFormatPayrollParser::TEMPLATE_COLUMNS as $columnName) {
-                $values[$columnName] = $this->sampleValue($columnName, $row, $i);
+            foreach ($columns as $columnName) {
+                // คอลัมน์ที่ผู้ใช้เพิ่มเองไม่ต้องมีค่าตัวอย่าง ปล่อยว่างให้ผู้ใช้กรอกเอง
+                $values[] = in_array($columnName, $baseColumns, true)
+                    ? $this->sampleValue($columnName, $row, $i)
+                    : '';
             }
 
-            $sheet->fromArray(array_values($values), null, 'A' . (self::FIRST_DATA_ROW + $i));
+            $sheet->fromArray($values, null, 'A' . (self::FIRST_DATA_ROW + $i));
             $row++;
         }
 
@@ -246,6 +255,7 @@ class ImportTemplateService
             'ปี'                       => 8,
             'ลำดับที่'                 => 10,
             'ID CARD', 'เลขที่บัญชี', 'เลขที่บัญชี.1' => 18,
+            'ภารกิจ', 'กลุ่มงาน', 'งาน'       => 22,
             'ยอดรวมรายรับทั้งหมด รายบุคคล'   => 22,
             'รวมรายรับทางตรง', 'รวมรายรับทางอ้อม' => 18,
             'ตำแหน่ง'                  => 26,

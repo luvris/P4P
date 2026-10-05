@@ -119,6 +119,22 @@ class PayrollExtraColumnTest extends TestCase
         }
     }
 
+    public function test_the_default_columns_sit_next_to_the_citizen_id(): void
+    {
+        // เป็นข้อมูลของคน ต้องอยู่ติดกับเลขบัตรประชาชน ไม่ใช่หลุดไปท้ายไฟล์
+        $path = tempnam(sys_get_temp_dir(), 'tpl_') . '.xlsx';
+        app(ImportTemplateService::class)->writePayrollTemplate($path);
+
+        $headers = \PhpOffice\PhpSpreadsheet\IOFactory::load($path)->getActiveSheet()->toArray()[0];
+
+        $this->assertSame(
+            ['ID CARD', 'ภารกิจ', 'กลุ่มงาน', 'งาน', 'เลขที่บัญชี'],
+            array_slice($headers, array_search('ID CARD', $headers, true), 5)
+        );
+
+        @unlink($path);
+    }
+
     public function test_only_admin_can_manage_columns(): void
     {
         $before = PayrollExtraColumn::count();
