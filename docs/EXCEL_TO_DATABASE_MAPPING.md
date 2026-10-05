@@ -1,111 +1,136 @@
-# 📋 Excel Columns → Database Schema Mapping
+# 📋 Excel Columns → Database Schema Mapping (ไฟล์เงินเดือนรูปแบบใหม่)
 
-## ตารางเปรียบเทียบแบบละเอียด
+**อัปเดต:** 2026-10-05 — แทนที่เอกสารฉบับเดิม (ไฟล์ PID/HID/SER แบบเก่า)
+ไฟล์เงินเดือนรูปแบบใหม่มี **39 คอลัมน์ + ปี + เดือน** และถูกใช้ทั้งการนำเข้าเงินเดือน
+(`POST /api/finance/imports`) และการนำเข้าทะเบียนบุคลากร (`POST /api/hr/imports`)
 
-### 🟢 ข้อมูลส่วนตัวพนักงาน (employees table)
-
-| # | Excel Column | Database Column | Type | คำอธิบาย |
-|---|--------------|-----------------|------|----------|
-| 1 | **PID** | `employee_id` | varchar | รหัสพนักงานภายใน (ไม่ใช่เลขบัตรประชาชน) |
-| 2 | **HID** | `citizen_id` | varchar(13) | เลขบัตรประชาชน 13 หลัก |
-| 3 | **TTL** | `prefix_id` | bigint | คำนำหน้าชื่อไทย → แปลงเป็น ID (นาย→1, นาง→2) |
-| 4 | **NAME** | `first_name` | varchar | ชื่อภาษาไทย |
-| 5 | **LNAME** | `last_name` | varchar | นามสกุลภาษาไทย |
-| 6 | **SEX** | `sex` | enum('M','F','O') | เพศ (ชาย→M, หญิง→F) |
-| 7 | **BLOOD** | `blood_type` | varchar | กรุ๊ปเลือด (A, B, AB, O) |
-| 8 | **BRON** | `birth_date` | date | วันเกิด |
-| 9 | **TEL** | `tel` | varchar(20) | เบอร์โทรศัพท์ |
-| 10 | **MOBILE** | `mobile` | varchar(20) | เบอร์มือถือ |
-| 11 | **ADDRESS1** | `address1` | text | ที่อยู่ 1 |
-| 12 | **ADDRESS2** | `address2` | text | ที่อยู่ 2 |
-| 13 | **ETTL** | `english_prefix` | varchar | คำนำหน้าชื่ออังกฤษ (Mr., Mrs., Ms.) |
-| 14 | **ENAME** | `english_first_name` | varchar | ชื่อภาษาอังกฤษ |
-| 15 | **ELNAME** | `english_last_name` | varchar | นามสกุลภาษาอังกฤษ |
-| 16 | **STATUS** | `status_id` | bigint | สถานะ → แปลงเป็น ID (ทำงาน→1, ลาออก→3) |
-| 17 | **LEAVES_BY** | `leaves_by` | varchar | - |
-| 18 | **FINGER** | `finger` | varchar | ข้อมูลลายนิ้วมือ |
-| 19 | **EMAIL** | `email` | varchar | อีเมล |
-| 20 | **TOKENLINE** | `line_token` | varchar | LINE Token |
+อ่านโค้ดจริงที่ [NewFormatPayrollParser.php](../backend/app/Services/Parsers/NewFormatPayrollParser.php)
+(`COLUMN_MAP`)
 
 ---
 
-### 🟡 ข้อมูลประวัติการทำงาน (employment_histories table)
+## 1. คอลัมน์งวด (ใช้ทุกแถว)
 
-| # | Excel Column | Database Column | Type | คำอธิบาย |
-|---|--------------|-----------------|------|----------|
-| 21 | **SER** | `serial_number` | varchar | เลขที่ประวัติ (unique ต่อ employee) |
-| 22 | **PID** (ซ้ำ) | `employee_id` | bigint | รหัสพนักงาน → ใช้เชื่อมกับ employees.id |
-| 23 | **WID** | `wid` | varchar | - |
-| 24 | **EMPLOYEE** | ✅ `employee_type_id` | bigint | **ประเภทบุคลากร** (ข้าราชการ, พนักงานราชการ) |
-| 25 | **WORKID** | `work_id` | bigint | - |
-| 26 | **MANAGE** | `manager` | varchar | ชื่อผู้จัดการ/หัวหน้า |
-| 27 | **POSITION** | ✅ `position_id` | bigint | **ตำแหน่งงาน** (พยาบาล, แพทย์) |
-| 28 | **CLASS** | `class` | varchar | ระดับ/ชั้น |
-| 29 | **CONDITION** | `condition` | varchar | เงื่อนไข |
-| 30 | **DATES** | `start_date` | date | วันที่เริ่มงาน/เริ่มตำแหน่ง |
-| 31 | **DATEE** | `end_date` | date | วันที่สิ้นสุด/ย้ายตำแหน่ง |
-| 32 | **EXP** | `experience` | varchar | ประสบการณ์/หมายเหตุ ✅ **ใช้เช็ค "ตำแหน่งปัจจุบัน"** |
-| 33 | **MARK** | `mark` | text | หมายเหตุ ✅ **ใช้เช็ค "ลาออก"** |
-| 34 | **PAYROLL** | `payroll` | decimal(10,2) | เงินเดือน |
-| 35 | **DATEDIREC** | `appointment_date` | date | วันที่ในคำสั่งแต่งตั้ง |
-| 36 | **CODEDIREC** | `appointment_code` | varchar | เลขที่คำสั่งแต่งตั้ง |
+| คอลัมน์ | Field | หมายเหตุ |
+| --- | --- | --- |
+| `ปี` | `period_year` | พ.ศ. รับได้ทั้งตัวเลขและข้อความ |
+| `เดือน` | `period_month` | ชื่อไทย (`มกราคม`/`ม.ค.`) หรือเลข 1–12 |
+| — | `fiscal_year` | **คำนวณอัตโนมัติ** = ปี+1 ถ้าเดือน ต.ค.–ธ.ค. ไม่งั้น = ปี |
+
+ไฟล์จริงหนึ่งไฟล์รวมหลายงวด (ตัวอย่าง: 2,673 แถว = 8 งวด × ~349 คน)
 
 ---
 
-## 🔄 การแปลงข้อมูลอัตโนมัติ
+## 2. คอลัมน์ข้อมูลบุคลากร → ตาราง `employees`
 
-### 1️⃣ TTL (คำนำหน้าไทย) → prefix_id
-```
-"นาย" → ค้นหาใน prefixes table → prefix_id = 1
-"นาง" → prefix_id = 2
-"นางสาว" → prefix_id = 3
-```
+อัปเดตผ่าน [NewFormatEmployeeImportService.php](../backend/app/Services/NewFormatEmployeeImportService.php)
+โดยยุบเหลืองวดล่าสุดต่อ `id card` ก่อนเขียน
 
-### 2️⃣ EMPLOYEE (ประเภทบุคลากร) → employee_type_id
-```
-"ข้าราชการ" → employee_types table → id = 1
-"พนักงานราชการ" → id = 2
-"พนักงานกระทรวงสาธารณสุข" → id = 6
-ถ้าไม่มี → สร้างใหม่อัตโนมัติ
-```
+| คอลัมน์ | `employees` | ประเภท | หมายเหตุ |
+| --- | --- | --- | --- |
+| `id card` | `citizen_id` | varchar(13) | **กุญแจของ upsert** แถวไหนไม่มี = ข้าม |
+| `คำนำหน้า` | `prefix_id` | bigint | จับคู่ชื่อกับตาราง `prefixes` (ตรงตัว) |
+| `ชื่อ` | `first_name` | varchar | |
+| `นามสกุล` | `last_name` | varchar | |
+| `ประเภท` | `employee_type_id` | bigint | จับคู่ชื่อกับ `employee_types` |
+| `ตำแหน่ง` | `position_id` | bigint | ไม่พบชื่อนี้ใน `positions` → สร้างใหม่ให้อัตโนมัติ |
+| `ตำแหน่งเลขที่` | `position_number` | varchar | เช่น `0001` |
+| `เลขที่บัญชี` | `bank_account` | varchar | ช่องว่างในตัวเลขถูกตัดออกก่อนเทียบ |
+| `เงินเดือน` | `latest_salary` | decimal(12,2) | พร้อมบันทึกงวดลง `latest_period_year/month` |
+| `ปี` + `เดือน` | `latest_period_year`, `latest_period_month` | int | งวดของแถวที่ถูกเลือก |
 
-### 3️⃣ POSITION (ตำแหน่ง) → position_id
-```
-"พยาบาลวิชาชีพ" → positions table → id = X
-"นายแพทย์" → id = Y
-ถ้าไม่มี → สร้างใหม่อัตโนมัติ
-```
-
-### 4️⃣ STATUS (สถานะ) → status_id
-```
-"ทำงาน" → "ปฏิบัติงานอยู่" → id = 1
-"ออกจากงาน" → "ลาออก" → id = 3
-```
-
-### 5️⃣ PID (ปรากฏ 2 ครั้ง)
-- **ครั้งที่ 1 (คอลัมน์ 1):** employees.employee_id
-- **ครั้งที่ 2 (คอลัมน์ 22):** ใช้หา employees.id แล้วเก็บเป็น employment_histories.employee_id
+> คอลัมน์ส่วนตัวอื่น (เพศ, กรุ๊ปเลือด, วันเกิด, โทรศัพท์ ฯลฯ) ยังอยู่ในสคีมา `employees`
+> แต่ **ไฟล์รูปแบบใหม่ไม่มีคอลัมน์เหล่านี้** จึงต้องกรอกเองที่หน้ารายชื่อบุคลากร
+> คอลัมน์เดียวในไฟล์รูปแบบใหม่ที่เพิ่มใหม่ให้ทะเบียนคือ `bank_account_2`
+> (migration `2026_10_04_000001_align_employees_with_new_payroll_format.php`)
 
 ---
 
-## ⚠️ หมายเหตุสำคัญ
+## 3. คอลัมน์รายรับ-รายจ่าย → ตาราง `payrolls`
 
-1. **PID ซ้ำ 2 ครั้ง** - ครั้งที่ 1 เป็นข้อมูลพนักงาน, ครั้งที่ 2 เชื่อมประวัติ
-2. **EXP column** - ใช้ตรวจหา "ตำแหน่งปัจจุบัน" เพื่อกำหนดว่าประวัติไหนเป็นปัจจุบัน
-3. **MARK column** - ใช้ตรวจหา "ลาออก" เพื่อกำหนดสถานะ
-4. **แถวเดียวใน Excel** = ข้อมูลพนักงาน 1 คน + ประวัติ 1 รายการ
-5. **พนักงาน 1 คนอาจมีหลายแถว** = หลายประวัติ (เลื่อนขั้น, ย้ายตำแหน่ง)
+ทุกแถวของไฟล์คือ 1 งวดของ 1 คน เก็บครบทุกแถว (ต่างจากฝั่งบุคลากรที่ยุบเหลืองวดล่าสุด)
+
+### รายรับทางตรง
+
+| คอลัมน์ | `payrolls` |
+| --- | --- |
+| `เงินเดือน` | `salary` |
+| `ตกเบิก` | `salary_deduction` |
+| `ง.บ.ส.ก.` | `project_budget` |
+| `ปจต.` | `regular_allowance` |
+| `ค่าครองชีพ` | `living_allowance` |
+| `ไม่ทำเวชฯ` | `no_medical_service` |
+| `พตส.` | `position_allowance` |
+| `ค่าot` | `overtime` |
+| `บ่าย-ดึก เงินงบประมาณ` | `night_shift_budget` |
+| `บ่าย-ดึก เงินบำรุง` | `night_shift_maintenance` |
+| `p4p ประจำเดือน` | `p4p_monthly` |
+| `ค่าตอบแทน ปฏิบัติงาน covid 19` | `covid_allowance` |
+| `p4p โครงการคุณภาพ` | `p4p_quality_project` |
+| `รายได้อื่น` | `other_income` |
+| `รวมรายรับทางตรง` | `total_direct_income` |
+
+### รายจ่าย / รายรับทางอ้อม
+
+| คอลัมน์ | `payrolls` |
+| --- | --- |
+| `ค่ารักษา` | `medical_treatment` |
+| `ค่าเล่าเรียน` | `education_allowance` |
+| `ค่าเบี้ยเลี้ยง` | `meal_allowance` |
+| `ค่าเช่าที่พัก` | `housing_allowance` |
+| `ค่าพาหนะ` | `transport_allowance` |
+| `ค่าใช้จ่ายอื่น ๆ` | `other_expenses` |
+| `ต้นทุนจัดโครงการ` | `project_cost` |
+| `ประกันสังคม นายจ้าง` | `social_security_employer` |
+| `กองทุนสำรอง เลี้ยงชีพ` | `provident_fund` |
+| `รวมรายรับทางอ้อม` | `total_indirect_income` |
+
+### รวม / อื่น ๆ
+
+| คอลัมน์ | `payrolls` | หมายเหตุ |
+| --- | --- | --- |
+| **`ยอดรวมรายรับทั้งหมด รายบุคคล`** | `total_income` | **ฐานคำนวณเงินสำรอง** (`ReserveFundController` ใช้ `COALESCE(p.total_income, 0)`) |
+| `ลำดับที่` | `seq_number` | เลขลำดับในไฟล์ (ไม่ใช่ id ข้อมูล) |
+| `หมายเหตุ` | `note` | ข้อความ |
+| — | `fiscal_year`, `period_month`, `period_year` | งวดที่คำนวณจาก `ปี`+`เดือน` |
+| — | `citizen_id`, `first_name`, `last_name`, `prefix`, `employee_type`, `position_name`, `position_number`, `bank_account` | เก็บซ้ำไว้ใน `payrolls` ด้วย เพื่อรายงาน/ตรวจสอบย้อนหลังได้โดยไม่ต้อง join |
 
 ---
 
-## 📊 ตัวอย่างข้อมูล
+## 4. การแปลงค่า
+
+1. **จำนวนเงิน** — ตัด comma, ช่องว่าง, zero-width space ออก; ค่าว่าง หรือ `-`, `–`, `—`, `--` = **0**
+2. **เดือน** — รับทั้งชื่อเต็ม (`มกราคม`) ชื่อย่อ (`ม.ค.`) และเลข 1–12; ถ้านอกช่วง = null
+3. **ข้อความ** — trim, ค่า `-` กลายเป็นค่าว่าง
+4. **เลขที่บัญชี** — ตัดช่องว่างภายใน (`521 0 00000 3` → `52100000003`)
+5. **ปีงบประมาณ** — เดือน ต.ค.–ธ.ค. → ปี พ.ศ. + 1 (ปีงบเริ่ม ต.ค. ปีถัดไป)
+6. **การจับหัวตาราง** — เลือกแถวแรก ๆ ที่จับคอลัมน์ได้มากที่สุด (ต้อง ≥ 6 คอลัมน์)
+   จึงรองรับไฟล์ที่มีหัวตารางหลายแถวหรือคอลัมน์ไม่ครบทุกช่อง
+7. **ตรวจซ้ำ** — นำเข้าเงินเดือนจะข้ามแถวที่ `citizen_id + fiscal_year + period_month` ซ้ำกับข้อมูลเดิม
+   (ถ้าไม่รวมงวดจะทำให้ข้อมูลหลายงวดถูกกลืนทิ้ง)
+
+---
+
+## 5. ตัวอย่างการแปลง (ใช้ข้อมูลสมมติ)
+
+> ⚠️ เอกสารนี้**ไม่มีข้อมูลบุคคลจริงทุกรูปแบบ** — ตัวอย่างทั้งหมดเป็นค่าสมมติ
+> ห้ามนำชื่อ เลขบัตรประชาชน เลขที่บัญชี หรือเงินเดือนจริงมาวางในเอกสาร/คอมมิต
+
+แถวตัวอย่าง (สมมติ):
 
 ```
-PID=184 | HID=1234567890123 | TTL=นางสาว | NAME=สมหญิง | LNAME=ใจดี
-ETTL=Ms. | ENAME=Somying | ELNAME=Jaidee
-SER=2005 | EMPLOYEE=ข้าราชการ | POSITION=พยาบาลวิชาชีพ | EXP=ตำแหน่งปัจจุบัน
-
-→ สร้าง employees (id=100)
-→ สร้าง employment_histories (employee_id=100)
-→ อัพเดต employees: employee_type_id, position_id จากประวัติที่มี "ตำแหน่งปัจจุบัน"
+ลำดับที่=999 | ปี=2568 | เดือน=ธันวาคม | คำนำหน้า=นาย | ชื่อ=สมชาย | นามสกุล=ทดสอบ
+ประเภท=ข้าราชการ | ตำแหน่ง=พยาบาลวิชาชีพ | ตำแหน่งเลขที่=0000
+id card=0000000000000 | เลขที่บัญชี=0000000000 | เงินเดือน=30,000.00
+ยอดรวมรายรับทั้งหมด รายบุคคล=31,000.00
 ```
+
+แปลงเป็น:
+
+- **`payrolls`** → 1 แถว: `period_month = 12`, `fiscal_year = 2569`,
+  `period_year = 2568`, `seq_number = 999`, `total_income = 31000.00`
+- **`employees`** → upsert `citizen_id = 0000000000000`:
+  `สมชาย ทดสอบ`, `prefix_id` จาก "นาย", `employee_type_id` จาก "ข้าราชการ",
+  `position_id` จาก "พยาบาลวิชาชีพ",
+  `position_number = 0000`, `bank_account = 0000000000`,
+  `latest_salary = 30000.00`, `latest_period_year = 2569`, `latest_period_month = 12`
