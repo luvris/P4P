@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Log;
 /**
  * Service สำหรับ "นำเข้าข้อมูลการอยู่ภารกิจของบุคลากร"
  *
- * แยกออกจาก HrImportService ทั้งหมด — อัปเดตเฉพาะคอลัมน์ duty_id / group_id / work_id
+ * อัปเดตเฉพาะคอลัมน์ duty_id / group_id / work_id ไม่ยุ่งกับทะเบียนบุคลากร
  * ของ employees โดยเชื่อมบุคลากรผ่าน PID (employees.employee_id)
  */
 class DutyAssignmentImportService

@@ -7,7 +7,7 @@ use PhpOffice\PhpSpreadsheet\IOFactory;
 /**
  * Parser สำหรับ "นำเข้าข้อมูลการอยู่ภารกิจของบุคลากร"
  *
- * แยกจาก HrXlsxParser โดยสิ้นเชิง — ไม่แชร์ column map / logic กับ import บุคลากรเดิม
+ * ไม่แชร์ column map / logic กับการนำเข้าทะเบียนบุคลากร (ใช้ไฟล์เงินเดือนรูปแบบใหม่)
  *
  * รูปแบบไฟล์ (1 sheet, แถวแรกเป็น header):
  *   PID | ภารกิจ (DUTY) | PARTY (กลุ่มงาน) | AGENCIES (งาน)

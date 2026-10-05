@@ -1,0 +1,9 @@
+# ไฟล์ชั่วคราวของแอป/เครื่องมือ (ไม่ต้อง commit)
+.freebuff/
+
+# โฟลเดอร์ชั่วคราวทั่วไป
+temp/
+*.log
+
+# ไฟล์ตัวอย่างที่สคริปต์สร้างขึ้น (backend/scripts/make_sample_payroll.php)
+backend/sample_payroll_new_format.xlsx
