@@ -4,6 +4,7 @@ import FileDropZone from '../components/features/import/FileDropZone';
 import ImportSummary from '../components/features/import/ImportSummary';
 import SelectedFilePanel from '../components/features/import/SelectedFilePanel';
 import PreviewTable from '../components/features/import/PreviewTable';
+import TemplateDownloadButton from '../components/features/import/TemplateDownloadButton';
 import { importService } from '../services/importService';
 import { AlertTriangle, Link2Off } from 'lucide-react';
 import useFiscalYear from '../hooks/useFiscalYear';
@@ -91,6 +92,13 @@ const ImportPage = () => {
                 <p className="text-gray-500 text-sm">
                     รองรับไฟล์ Excel (.xlsx) และ Text (.txt)
                 </p>
+                <div className="mt-3">
+                    <TemplateDownloadButton
+                        endpoint="/finance/imports/template"
+                        label="ดาวน์โหลดแบบฟอร์มกรอกข้อมูล"
+                        hint="ไฟล์ต้นแบบ 39 คอลัมน์ — กรอกแล้วอัปกลับเข้ามาได้เลย ใช้ไฟล์เดียวกันนี้กับฝั่งบุคลากรได้ด้วย"
+                    />
+                </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

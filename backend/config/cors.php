@@ -37,7 +37,9 @@ return [
 
     // เปิดให้ JavaScript อ่านส่วนหัวเหล่านี้ได้ (ไม่ใช่ค่า default ที่เบราว์เซอร์เปิดให้)
     // Retry-After ใช้บอกฝั่ง frontend ว่าต้องรออีกกี่วินาทีเมื่อถูกจำกัดจำนวนครั้ง
-    'exposed_headers' => ['Retry-After'],
+    // Content-Disposition ต้องเปิดให้ฝั่งเว็บอ่านได้
+    // มิฉะนั้นการดาวน์โหลดไฟล์จะได้ชื่อกลาง ๆ แทนชื่อจริงของไฟล์
+    'exposed_headers' => ['Retry-After', 'Content-Disposition', 'Content-Length'],
 
     'max_age' => 0,
 

@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ImportController;
 use App\Http\Controllers\Api\HrImportController;
 use App\Http\Controllers\Api\DutyAssignmentImportController;
+use App\Http\Controllers\Api\ImportTemplateController;
 use App\Http\Controllers\Api\EmployeeController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\FiscalYearController;
@@ -78,6 +79,10 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::post('/preview', [HrImportController::class, 'preview']);
             Route::post('/',        [HrImportController::class, 'store']);
             Route::get('/',         [HrImportController::class, 'index']);
+
+            // ดาวน์โหลดแบบฟอร์มกรอกข้อมูล — ไฟล์เดียวกับฝั่งการเงิน
+            Route::get('/template', [ImportTemplateController::class, 'payroll']);
+            Route::get('/template/columns', [ImportTemplateController::class, 'columns']);
         });
 
         // นำเข้าข้อมูลการอยู่ภารกิจของบุคลากร — แยกจาก HR Import เดิมทั้งหมด
@@ -85,6 +90,7 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::post('/preview', [DutyAssignmentImportController::class, 'preview']);
             Route::post('/',        [DutyAssignmentImportController::class, 'store']);
             Route::get('/',         [DutyAssignmentImportController::class, 'index']);
+            Route::get('/template', [ImportTemplateController::class, 'dutyAssignment']);
         });
 
         // เงินสำรอง (คำนวณจาก payroll — ต้องระบุเปอร์เซ็นต์เอง)
@@ -119,6 +125,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware('role:admin,finance')->prefix('finance')->group(function () {
         Route::post('/imports',           [ImportController::class, 'store']);
         Route::get('/imports',            [ImportController::class, 'index']);
+
+        // ต้องประกาศก่อน /imports/{import} ไม่อย่างนั้น "template" จะถูกตีความเป็น id
+        Route::get('/imports/template',         [ImportTemplateController::class, 'payroll']);
+        Route::get('/imports/template/columns', [ImportTemplateController::class, 'columns']);
+
         Route::get('/imports/{import}',   [ImportController::class, 'show']);
 
         // ใบเบิกค่าใช้จ่ายเดินทางไปราชการ

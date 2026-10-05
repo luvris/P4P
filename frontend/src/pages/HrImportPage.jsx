@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import { AlertTriangle, FileText, ArrowLeft, CheckCircle2, Upload } from 'lucide-react';
 import HrFileDropZone from '../components/features/import/HrFileDropZone';
 import DutyAssignmentImportPanel from '../components/features/import/DutyAssignmentImportPanel';
+import TemplateDownloadButton from '../components/features/import/TemplateDownloadButton';
 import { hrImportService } from '../services/hrImportService';
 
 /**
@@ -478,6 +479,22 @@ const HrImportPage = () => {
             <div className="mb-6">
                 <h2 className="text-2xl font-bold text-[#8B5E3C] mb-1">{active.label}</h2>
                 <p className="text-gray-500 text-sm">{active.description}</p>
+
+                <div className="mt-3">
+                    <TemplateDownloadButton
+                        endpoint={
+                            importType === 'duty_assignment'
+                                ? '/hr/duty-assignment-imports/template'
+                                : '/hr/imports/template'
+                        }
+                        label="ดาวน์โหลดแบบฟอร์มกรอกข้อมูล"
+                        hint={
+                            importType === 'duty_assignment'
+                                ? 'ไฟล์ต้นแบบ PID / DUTY / PARTY / AGENCIES — กรอกแล้วอัปกลับเข้ามาได้เลย'
+                                : 'ไฟล์เดียวกับฝั่งการเงิน ไฟล์ต้นแบบ 39 คอลัมน์ — กรอกแล้วอัปกลับเข้ามาได้เลย'
+                        }
+                    />
+                </div>
             </div>
 
             {/* เลือกประเภทการนำเข้าข้อมูล */}
