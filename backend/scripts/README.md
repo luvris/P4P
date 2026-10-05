@@ -12,6 +12,7 @@
 | `check_imports.php` | สรุปประวัติการนำเข้าล่าสุด 5 รายการ + จำนวนแถวใน `employees` / `payrolls` / ยอดรายรับรวม |
 | `test_all_files.php` | ลองอ่านไฟล์ที่อยู่ใน `storage/app/private/imports` ล่าสุด 5 ไฟล์ ด้วย `NewFormatPayrollParser` พร้อมสรุปจำนวนแถวต่องวด — **ต้องใช้ `-d memory_limit=1024M`** เพราะอ่านหลายไฟล์ในกระบวนการเดียวกัน |
 | `make_sample_payroll.php` | สร้างไฟล์ตัวอย่างรูปแบบใหม่ 1 งวด (39 คอลัมน์, 5 คน) ไว้ที่ `backend/sample_payroll_new_format.xlsx` สำหรับทดลอง import ด้วยมือ |
+| `link_duty_by_citizen_id.php` | เชื่อม `employees.duty_id` (ค่าเริ่มต้น) หรือทั้งตำแหน่ง/ประเภทด้วย `--all` จากไฟล์ `รหัสประชาชน \| ประเภท \| ตำแหน่ง \| ภารกิจ` (`.csv`/`.tsv`) — **ค่าเริ่มต้นคือโหมดตรวจ ไม่เขียนอะไรลงฐาน** เพิ่ม `--apply` เมื่อพร้อมบันทึกจริง ใช้ `--skip-duty="ชื่อภารกิจ"` เพื่อข้ามภารกิจที่ยังไม่ตัดสินใจ (ตัดคำว่า `ภารกิจ` นำหน้าออกให้อัตโนมัติ) ⚠️ ไฟล์นำเข้ามีเลขบัตรประชาชนจริง ให้เก็บไว้นอกโฟลเดอร์ `backend/` เพราะจะถูก commit |
 | `make_multi_period_payroll.php` | สร้างไฟล์ตัวอย่างที่**รวมหลายงวดในไฟล์เดียว** (ต.ค.–ธ.ค. 2568) ไว้ที่ `backend/sample_payroll_multi_period.xlsx` ใช้ทดสอบว่าระบบแยกงวดให้เอง |
 
 > สคริปต์ที่เคยอยู่ที่ราก `backend/` (`analyze_db.php`, `analyze_excel.php`, `inspect_import.php`)
