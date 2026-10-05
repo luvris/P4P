@@ -23,6 +23,9 @@ class PayrollExtraColumnTest extends TestCase
 {
     use RefreshDatabase;
 
+    /** คอลัมน์ที่มาพร้อมระบบตั้งแต่แรก */
+    protected const DEFAULT_NAMES = ['ภารกิจ', 'กลุ่มงาน', 'งาน'];
+
     protected User $admin;
 
     protected User $hr;
@@ -33,6 +36,12 @@ class PayrollExtraColumnTest extends TestCase
 
         $this->admin = $this->makeUser('admin', 'ex_admin');
         $this->hr = $this->makeUser('hr', 'ex_hr');
+    }
+
+    /** เอาเฉพาะคอลัมน์ที่ประกาศเพิ่ม ตัดคอลัมน์ตั้งต้นออกให้หมด */
+    protected function withoutDefaultColumns(): void
+    {
+        PayrollExtraColumn::whereIn('name', self::DEFAULT_NAMES)->delete();
     }
 
     protected function makeUser(string $role, string $username): User
@@ -93,22 +102,34 @@ class PayrollExtraColumnTest extends TestCase
             ->assertJsonPath('data.name', 'ค่าครองชีพเฉพาะหน่วย')
             ->assertJsonPath('data.data_type', 'number');
 
-        $column = PayrollExtraColumn::firstOrFail();
+        $column = PayrollExtraColumn::where('name', 'ค่าครองชีพเฉพาะหน่วย')->firstOrFail();
 
         // ชื่อไทยแปลงเป็น key อังกฤษไม่ได้ จึงต้องมี key สำรองที่ใช้งานได้
         $this->assertNotSame('', $column->key);
         $this->assertMatchesRegularExpression('/^[a-z0-9_]+$/', $column->key);
     }
 
+    public function test_the_three_default_columns_come_with_the_system(): void
+    {
+        // ภารกิจ/กลุ่มงาน/งาน อยู่ในไฟล์จริงมานานแล้ว ต้องมาในไฟล์ต้นแบบตั้งแต่แรก
+        $names = PayrollExtraColumn::active()->pluck('name')->all();
+
+        foreach (self::DEFAULT_NAMES as $name) {
+            $this->assertContains($name, $names);
+        }
+    }
+
     public function test_only_admin_can_manage_columns(): void
     {
+        $before = PayrollExtraColumn::count();
+
         foreach ([$this->hr, $this->makeUser('finance', 'ex_finance')] as $user) {
             $this->actingAs($user)
                 ->postJson('/api/admin/payroll-extra-columns', ['name' => 'ทดสอบ'])
                 ->assertForbidden();
         }
 
-        $this->assertSame(0, PayrollExtraColumn::count());
+        $this->assertSame($before, PayrollExtraColumn::count());
     }
 
     public function test_column_names_must_be_unique(): void
@@ -145,7 +166,9 @@ class PayrollExtraColumnTest extends TestCase
 
     public function test_the_template_gains_the_new_columns(): void
     {
-        $before = count(NewFormatPayrollParser::TEMPLATE_COLUMNS);
+        $service = app(PayrollExtraColumnService::class);
+        $service->flushCache();
+        $before = count(NewFormatPayrollParser::TEMPLATE_COLUMNS) + PayrollExtraColumn::active()->count();
 
         PayrollExtraColumn::create([
             'name' => 'ค่าครองชีพเฉพาะหน่วย', 'key' => 'living', 'sort_order' => 1,
@@ -239,11 +262,17 @@ class PayrollExtraColumnTest extends TestCase
             ->assertCreated();
 
         // คอลัมน์ที่ไม่ได้ประกาศต้องไม่ถูกเก็บ ไม่งั้นข้อมูลจะปนเข้ามาโดยไม่มีที่มา
-        $this->assertNull(Payroll::firstOrFail()->extra_data);
+        $extra = Payroll::firstOrFail()->extra_data;
+
+        $this->assertIsArray($extra);
+        $this->assertArrayNotHasKey('คอลัมน์แปลกที่ไม่ได้ประกาศ', $extra);
+        $this->assertSame(array_keys($extra), PayrollExtraColumn::active()->pluck('key')->all());
     }
 
     public function test_import_works_when_no_extra_column_is_declared(): void
     {
+        $this->withoutDefaultColumns();
+
         $this->actingAs($this->hr)
             ->post('/api/imports', ['file' => $this->fileWithExtras([])])
             ->assertCreated()
@@ -254,7 +283,7 @@ class PayrollExtraColumnTest extends TestCase
 
     public function test_preview_reports_the_extra_columns(): void
     {
-        PayrollExtraColumn::create(['name' => 'ค่าครองชีพเฉพาะหน่วย', 'key' => 'living']);
+        PayrollExtraColumn::create(['name' => 'ค่าครองชีพเฉพาะหน่วย', 'key' => 'living', 'sort_order' => 99]);
 
         $response = $this->actingAs($this->hr)
             ->getJson('/api/imports/template/columns');
@@ -262,7 +291,9 @@ class PayrollExtraColumnTest extends TestCase
         $response->assertOk();
 
         $this->assertContains('ค่าครองชีพเฉพาะหน่วย', $response->json('data.payroll.columns'));
-        $this->assertSame('living', $response->json('data.payroll.extras.0.key'));
+        // คอลัมน์ตั้งต้นมาก่อน คอลัมน์ที่เพิ่มทีหลัง
+        $this->assertSame('duty', $response->json('data.payroll.extras.0.key'));
+        $this->assertSame('living', $response->json('data.payroll.extras.3.key'));
         // คอลัมน์เดิมต้องยังอยู่ครบ ไม่ถูกแทนที่
         $this->assertSame(
             NewFormatPayrollParser::TEMPLATE_COLUMNS,

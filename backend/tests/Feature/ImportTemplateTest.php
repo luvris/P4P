@@ -198,7 +198,12 @@ class ImportTemplateTest extends TestCase
             ->getJson('/api/imports/template/columns');
 
         $response->assertOk()
-            ->assertJsonPath('data.payroll.columns', NewFormatPayrollParser::TEMPLATE_COLUMNS)
+            // 39 คอลัมน์เดิมยังอยู่ครบ ส่วนที่เหลือคือคอลัมน์ที่ผู้ดูแลระบบประกาศเพิ่ม
+            ->assertJsonPath('data.payroll.base_columns', NewFormatPayrollParser::TEMPLATE_COLUMNS)
+            ->assertJsonPath('data.payroll.columns', array_merge(
+                NewFormatPayrollParser::TEMPLATE_COLUMNS,
+                ['ภารกิจ', 'กลุ่มงาน', 'งาน']
+            ))
             ->assertJsonPath('data.payroll.required', NewFormatPayrollParser::CRITICAL_COLUMNS);
     }
 }
