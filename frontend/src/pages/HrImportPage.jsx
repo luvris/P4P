@@ -6,6 +6,27 @@ import DutyAssignmentImportPanel from '../components/features/import/DutyAssignm
 import { hrImportService } from '../services/hrImportService';
 
 /**
+ * เดือนแบบย่อ → ชื่อเดือนภาษาไทย (คอลัมน์ "เดือน" ในไฟล์รูปแบบใหม่เป็นตัวเลข 1-12)
+ */
+const THAI_MONTHS = [
+    '',
+    'ม.ค.',
+    'ก.พ.',
+    'มี.ค.',
+    'เม.ย.',
+    'พ.ค.',
+    'มิ.ย.',
+    'ก.ค.',
+    'ส.ค.',
+    'ก.ย.',
+    'ต.ค.',
+    'พ.ย.',
+    'ธ.ค.',
+];
+
+const monthLabel = (month) => THAI_MONTHS[Number(month)] || '-';
+
+/**
  * ป้ายชื่อชุดข้อมูลที่ผูกกับเลขแถว
  */
 const TYPE_LABELS = {
@@ -60,7 +81,7 @@ const HrEmployeeImportSection = () => {
     const [preview, setPreview] = useState(null); // { preview: [], warnings: [], warning_count, total_rows }
     const [importing, setImporting] = useState(false);
     const [summary, setSummary] = useState(null);
-    const [rowErrors, setRowErrors] = useState([]);
+    const [warnings, setWarnings] = useState([]);
 
     const handleFileSelect = (file) => {
         const extension = file.name.split('.').pop().toLowerCase();
@@ -78,14 +99,14 @@ const HrEmployeeImportSection = () => {
         setSelectedFile(file);
         setPreview(null);
         setSummary(null);
-        setRowErrors([]);
+        setWarnings([]);
     };
 
     const handleClear = () => {
         setSelectedFile(null);
         setPreview(null);
         setSummary(null);
-        setRowErrors([]);
+        setWarnings([]);
     };
 
     const handlePreview = async () => {
@@ -111,7 +132,7 @@ const HrEmployeeImportSection = () => {
         try {
             const result = await hrImportService.store(selectedFile);
             setSummary(result.summary);
-            setRowErrors(result.row_errors || []);
+            setWarnings(result.warnings || []);
             toast.success('นำเข้าข้อมูลบุคลากรสำเร็จ');
         } catch (error) {
             const message = error.response?.data?.message || 'เกิดข้อผิดพลาดในการนำเข้า';
@@ -174,14 +195,14 @@ const HrEmployeeImportSection = () => {
                         </div>
                     </div>
 
-                    {rowErrors.length > 0 && (
-                        <div className="bg-red-50 border border-red-100 rounded-xl p-4 mb-6">
-                            <h3 className="font-semibold text-red-700 mb-2">
-                                แถวที่ผิดพลาด ({rowErrors.length})
+                    {warnings.length > 0 && (
+                        <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 mb-6">
+                            <h3 className="font-semibold text-yellow-700 mb-2">
+                                คำเตือน ({warnings.length})
                             </h3>
                             <div className="max-h-48 overflow-y-auto space-y-1">
-                                {rowErrors.map((err, i) => (
-                                    <IssueLine key={i} issue={err} className="text-sm text-red-600" />
+                                {warnings.map((w, i) => (
+                                    <IssueLine key={i} issue={w} className="text-sm text-yellow-700" />
                                 ))}
                             </div>
                         </div>
@@ -246,15 +267,31 @@ const HrEmployeeImportSection = () => {
                                 </div>
                             )}
 
-                            {/* Preview Table - ข้อมูลส่วนตัวพนักงาน */}
-                            {preview.preview.employees && preview.preview.employees.length > 0 && (
+{/* ตารางตัวอย่าง — คอลัมน์ตามไฟล์เงินเดือนรูปแบบใหม่ */}
+                            {preview.preview?.rows?.length > 0 && (
                                 <div className="bg-white rounded-2xl border border-[#E6D3A3] p-6">
                                     <div className="flex items-center justify-between mb-4">
                                         <h3 className="text-lg font-semibold text-gray-700">
-                                            📋 ข้อมูลส่วนตัวพนักงาน
+                                            📋 ข้อมูลบุคลากร (งวดล่าสุด)
                                         </h3>
                                         <span className="text-xs text-gray-500">
-                                            แสดง {preview.preview.employees.length} แถวแรก (ทั้งหมด {preview.preview.employee_count || 0} รายการ)
+                                            แสดง {preview.preview.rows.length} แถวแรก (ทั้งหมด{' '}
+                                            {preview.preview.total_rows} คน)
+                                        </span>
+                                    </div>
+
+                                    <div className="flex flex-wrap gap-4 mb-4 text-sm">
+                                        <span className="text-gray-600">
+                                            เพิ่มใหม่{' '}
+                                            <span className="font-semibold text-blue-600">
+                                                {preview.preview.new_count}
+                                            </span>
+                                        </span>
+                                        <span className="text-gray-600">
+                                            อัปเดต{' '}
+                                            <span className="font-semibold text-green-600">
+                                                {preview.preview.update_count}
+                                            </span>
                                         </span>
                                     </div>
 
@@ -263,31 +300,34 @@ const HrEmployeeImportSection = () => {
                                             <thead>
                                                 <tr className="bg-[#C5A059] text-white">
                                                     <th className="px-3 py-2 text-left font-medium">#</th>
-                                                    <th className="px-3 py-2 text-left font-medium whitespace-nowrap">เลขไอดี</th>
-                                                    <th className="px-3 py-2 text-left font-medium whitespace-nowrap">เลขบัตรประชาชน</th>
+                                                    <th className="px-3 py-2 text-left font-medium whitespace-nowrap">ลำดับที่</th>
+                                                    <th className="px-3 py-2 text-left font-medium whitespace-nowrap">งวดเดือน</th>
                                                     <th className="px-3 py-2 text-left font-medium whitespace-nowrap">คำนำหน้า</th>
                                                     <th className="px-3 py-2 text-left font-medium whitespace-nowrap">ชื่อ</th>
                                                     <th className="px-3 py-2 text-left font-medium whitespace-nowrap">นามสกุล</th>
-                                                    <th className="px-3 py-2 text-left font-medium whitespace-nowrap">เพศ</th>
-                                                    <th className="px-3 py-2 text-left font-medium whitespace-nowrap">กรุ๊ปเลือด</th>
-                                                    <th className="px-3 py-2 text-left font-medium whitespace-nowrap">วันเกิด</th>
-                                                    <th className="px-3 py-2 text-left font-medium whitespace-nowrap">โทรศัพท์</th>
+                                                    <th className="px-3 py-2 text-left font-medium whitespace-nowrap">ประเภท</th>
+                                                    <th className="px-3 py-2 text-left font-medium whitespace-nowrap">ตำแหน่ง</th>
+                                                    <th className="px-3 py-2 text-left font-medium whitespace-nowrap">ตำแหน่งเลขที่</th>
+                                                    <th className="px-3 py-2 text-left font-medium whitespace-nowrap">เลขบัตรประชาชน</th>
+                                                    <th className="px-3 py-2 text-left font-medium whitespace-nowrap">เลขที่บัญชี</th>
+                                                    <th className="px-3 py-2 text-right font-medium whitespace-nowrap">เงินเดือน</th>
+                                                    <th className="px-3 py-2 text-left font-medium whitespace-nowrap">การดำเนินการ</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                {preview.preview.employees.map((row, rowIndex) => (
+                                                {preview.preview.rows.map((row, rowIndex) => (
                                                     <tr
-                                                        key={rowIndex}
+                                                        key={row.citizen_id || rowIndex}
                                                         className={`border-b border-gray-100 ${
                                                             rowIndex % 2 === 0 ? 'bg-white' : 'bg-[#FDFBF7]'
                                                         } hover:bg-[#F5EEDC]/30 transition-colors`}
                                                     >
                                                         <td className="px-3 py-2 text-gray-500">{rowIndex + 1}</td>
                                                         <td className="px-3 py-2 text-gray-700 whitespace-nowrap">
-                                                            {row.employee_id || '-'}
+                                                            {row.seq_number || '-'}
                                                         </td>
                                                         <td className="px-3 py-2 text-gray-700 whitespace-nowrap">
-                                                            {row.citizen_id || '-'}
+                                                            {monthLabel(row.period_month)}
                                                         </td>
                                                         <td className="px-3 py-2 text-gray-700 whitespace-nowrap">
                                                             {row.prefix || '-'}
@@ -299,88 +339,33 @@ const HrEmployeeImportSection = () => {
                                                             {row.last_name || '-'}
                                                         </td>
                                                         <td className="px-3 py-2 text-gray-700 whitespace-nowrap">
-                                                            {row.sex || '-'}
-                                                        </td>
-                                                        <td className="px-3 py-2 text-gray-700 whitespace-nowrap">
-                                                            {row.blood_type || '-'}
-                                                        </td>
-                                                        <td className="px-3 py-2 text-gray-700 whitespace-nowrap">
-                                                            {row.birth_date || '-'}
-                                                        </td>
-                                                        <td className="px-3 py-2 text-gray-700 whitespace-nowrap">
-                                                            {row.mobile || row.tel || '-'}
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    </div>
-
-                                    <div className="mt-4 text-xs text-gray-500 text-center">
-                                        * แสดงตัวอย่างเพียง 10 แถวแรก — ข้อมูลจริงจะถูกนำเข้าทั้งหมด
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Preview Table - ข้อมูลประวัติการจ้างงาน */}
-                            {preview.preview.employments && preview.preview.employments.length > 0 && (
-                                <div className="bg-white rounded-2xl border border-[#E6D3A3] p-6 mt-6">
-                                    <div className="flex items-center justify-between mb-4">
-                                        <h3 className="text-lg font-semibold text-gray-700">
-                                            💼 ข้อมูลประวัติการจ้างงาน
-                                        </h3>
-                                        <span className="text-xs text-gray-500">
-                                            แสดง {preview.preview.employments.length} แถวแรก (ทั้งหมด {preview.preview.employment_count || 0} รายการ)
-                                        </span>
-                                    </div>
-
-                                    <div className="overflow-x-auto">
-                                        <table className="w-full text-sm">
-                                            <thead>
-                                                <tr className="bg-[#8B5E3C] text-white">
-                                                    <th className="px-3 py-2 text-left font-medium">#</th>
-                                                    <th className="px-3 py-2 text-left font-medium whitespace-nowrap">เลขที่</th>
-                                                    <th className="px-3 py-2 text-left font-medium whitespace-nowrap">เลขไอดี</th>
-                                                    <th className="px-3 py-2 text-left font-medium whitespace-nowrap">ประเภท</th>
-                                                    <th className="px-3 py-2 text-left font-medium whitespace-nowrap">ตำแหน่ง</th>
-                                                    <th className="px-3 py-2 text-left font-medium whitespace-nowrap">ประเภทการจ้าง</th>
-                                                    <th className="px-3 py-2 text-left font-medium whitespace-nowrap">วันเริ่มงาน</th>
-                                                    <th className="px-3 py-2 text-left font-medium whitespace-nowrap">วันสิ้นสุด</th>
-                                                    <th className="px-3 py-2 text-right font-medium whitespace-nowrap">เงินเดือน</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {preview.preview.employments.map((row, rowIndex) => (
-                                                    <tr
-                                                        key={rowIndex}
-                                                        className={`border-b border-gray-100 ${
-                                                            rowIndex % 2 === 0 ? 'bg-white' : 'bg-[#FDFBF7]'
-                                                        } hover:bg-[#F5EEDC]/30 transition-colors`}
-                                                    >
-                                                        <td className="px-3 py-2 text-gray-500">{rowIndex + 1}</td>
-                                                        <td className="px-3 py-2 text-gray-700 whitespace-nowrap">
-                                                            {row.serial_number || '-'}
-                                                        </td>
-                                                        <td className="px-3 py-2 text-gray-700 whitespace-nowrap">
-                                                            {row.employee_id || '-'}
-                                                        </td>
-                                                        <td className="px-3 py-2 text-gray-700 whitespace-nowrap">
                                                             {row.employee_type || '-'}
                                                         </td>
                                                         <td className="px-3 py-2 text-gray-700 whitespace-nowrap">
-                                                            {row.position || '-'}
+                                                            {row.position_name || '-'}
                                                         </td>
                                                         <td className="px-3 py-2 text-gray-700 whitespace-nowrap">
-                                                            {row.condition || '-'}
+                                                            {row.position_number || '-'}
                                                         </td>
                                                         <td className="px-3 py-2 text-gray-700 whitespace-nowrap">
-                                                            {row.start_date || '-'}
+                                                            {row.citizen_id || '-'}
                                                         </td>
                                                         <td className="px-3 py-2 text-gray-700 whitespace-nowrap">
-                                                            {row.end_date || '-'}
+                                                            {row.bank_account || '-'}
                                                         </td>
                                                         <td className="px-3 py-2 text-right text-gray-700 whitespace-nowrap">
-                                                            {formatNumber(row.payroll)}
+                                                            {formatNumber(row.latest_salary)}
+                                                        </td>
+                                                        <td className="px-3 py-2 whitespace-nowrap">
+                                                            <span
+                                                                className={`px-2 py-0.5 rounded-full text-xs ${
+                                                                    row.action === 'update'
+                                                                        ? 'bg-green-100 text-green-700'
+                                                                        : 'bg-blue-100 text-blue-700'
+                                                                }`}
+                                                            >
+                                                                {row.action === 'update' ? 'อัปเดต' : 'เพิ่มใหม่'}
+                                                            </span>
                                                         </td>
                                                     </tr>
                                                 ))}
@@ -389,17 +374,17 @@ const HrEmployeeImportSection = () => {
                                     </div>
 
                                     <div className="mt-4 text-xs text-gray-500 text-center">
-                                        * แสดงตัวอย่างเพียง 10 แถวแรก — ข้อมูลจริงจะถูกนำเข้าทั้งหมด
+                                        * แสดงตัวอย่างเพียง 10 แถวแรก — ไฟล์รวมหลายงวด
+                                        ระบบจะใช้ข้อมูลงวดล่าสุดต่อคนทั้งหมด ({preview.preview.total_rows} คน)
                                     </div>
                                 </div>
                             )}
 
                             {/* กรณีไม่มีข้อมูลเลย */}
-                            {(!preview.preview.employees || preview.preview.employees.length === 0) &&
-                             (!preview.preview.employments || preview.preview.employments.length === 0) && (
+                            {(preview.preview?.rows?.length ?? 0) === 0 && (
                                 <div className="bg-yellow-50 rounded-2xl border border-yellow-200 p-6 text-center">
                                     <p className="text-yellow-700 text-sm">
-                                        ⚠️ ไม่พบข้อมูลในไฟล์ — กรุณาตรวจสอบรูปแบบไฟล์
+                                        ⚠️ ไม่พบข้อมูลบุคลากรในไฟล์ (ต้องมีเลขบัตรประชาชน)
                                     </p>
                                 </div>
                             )}
@@ -465,14 +450,16 @@ const HrEmployeeImportSection = () => {
 
 /**
  * ประเภทการนำเข้าข้อมูล
- * - employee: ของเดิม (นำเข้าข้อมูลบุคลากร)
- * - duty_assignment: ของใหม่ (นำเข้าข้อมูลการอยู่ภารกิจ)
+ * - employee: ข้อมูลบุคลากร (ไฟล์เงินเดือนรูปแบบใหม่ 39 คอลัมน์)
+ * - duty_assignment: ข้อมูลการอยู่ภารกิจ (PID + DUTY)
  */
 const IMPORT_TYPES = [
     {
         value: 'employee',
         label: 'นำเข้าข้อมูลบุคลากร',
-        description: 'รองรับไฟล์ Excel (.xlsx) — ระบบจะอัปเดตข้อมูลบุคลากรตามเลขบัตรประชาชน',
+        description:
+            'รองรับไฟล์เงินเดือนรูปแบบใหม่ (.xlsx) — ระบบจะใช้ข้อมูลงวดล่าสุดของแต่ละคน'
+            + ' แล้วเพิ่ม/อัปเดตทะเบียนบุคลากรตามเลขบัตรประชาชน',
     },
     {
         value: 'duty_assignment',
@@ -516,11 +503,9 @@ const HrImportPage = () => {
             </div>
 
             {/* แต่ละประเภทใช้ component + service ของตัวเอง (state แยกกันสมบูรณ์) */}
-            {importType === 'employee' ? (
-                <HrEmployeeImportSection />
-            ) : (
-                <DutyAssignmentImportPanel />
-            )}
+            {importType === 'employee' && <HrEmployeeImportSection />}
+
+            {importType === 'duty_assignment' && <DutyAssignmentImportPanel />}
         </div>
     );
 };

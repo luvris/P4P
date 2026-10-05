@@ -1,5 +1,10 @@
 import api from './api';
 
+/**
+ * ไฟล์เงินเดือนจริงมีหลายพันแถว ใช้เวลาอ่าน+เขียนนานกว่า timeout ปกติ (10 วิ)
+ */
+const UPLOAD_TIMEOUT = 180000;
+
 export const importService = {
   /**
    * อัปโหลดไฟล์
@@ -16,6 +21,7 @@ export const importService = {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
+      timeout: UPLOAD_TIMEOUT,
     });
 
     return response.data;

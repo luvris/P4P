@@ -1,5 +1,10 @@
 import api from './api';
 
+/**
+ * ไฟล์เงินเดือนจริงมีหลายพันแถว ใช้เวลาอ่าน+เขียนนานกว่า timeout ปกติ (10 วิ)
+ */
+const UPLOAD_TIMEOUT = 180000;
+
 export const hrImportService = {
   /**
    * อ่านไฟล์เพื่อดูตัวอย่างข้อมูล (10 แถวแรก) + คำเตือน
@@ -12,6 +17,7 @@ export const hrImportService = {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
+      timeout: UPLOAD_TIMEOUT,
     });
 
     return response.data;
@@ -28,6 +34,7 @@ export const hrImportService = {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
+      timeout: UPLOAD_TIMEOUT,
     });
 
     return response.data;
