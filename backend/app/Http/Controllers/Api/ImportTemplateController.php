@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Services\ImportTemplateService;
 use App\Services\Parsers\NewFormatPayrollParser;
+use App\Services\PayrollExtraColumnService;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx as XlsxWriter;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -17,12 +18,13 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 class ImportTemplateController extends Controller
 {
     public function __construct(
-        protected ImportTemplateService $templates
+        protected ImportTemplateService $templates,
+        protected PayrollExtraColumnService $extraColumns
     ) {}
 
     /**
-     * GET /api/finance/imports/template
-     * แบบฟอร์มเงินเดือน 39 คอลัมน์ — ใช้ได้ทั้งฝั่ง Finance และ HR
+     * GET /api/imports/template
+     * แบบฟอร์มเงินเดือน 39 คอลัมน์ + คอลัมน์ที่ผู้ใช้เพิ่มไว้
      */
     public function payroll(): StreamedResponse
     {
@@ -37,14 +39,19 @@ class ImportTemplateController extends Controller
      */
     public function columns(): \Illuminate\Http\JsonResponse
     {
+        $base = NewFormatPayrollParser::TEMPLATE_COLUMNS;
+
         return response()->json([
             'data' => [
                 'payroll' => [
-                    'title'            => 'แบบฟอร์มนำเข้าข้อมูลเงินเดือน',
-                    'columns'          => NewFormatPayrollParser::TEMPLATE_COLUMNS,
-                    'required'         => NewFormatPayrollParser::CRITICAL_COLUMNS,
-                    'reserve_base'     => NewFormatPayrollParser::RESERVE_BASE_COLUMNS,
-                    'months'           => NewFormatPayrollParser::TEMPLATE_MONTHS,
+                    'title'        => 'แบบฟอร์มนำเข้าข้อมูลเงินเดือน',
+                    'columns'      => $this->extraColumns->columnsWithExtras($base),
+                    'base_columns' => $base,
+                    'required'     => NewFormatPayrollParser::CRITICAL_COLUMNS,
+                    'reserve_base' => NewFormatPayrollParser::RESERVE_BASE_COLUMNS,
+                    'months'       => NewFormatPayrollParser::TEMPLATE_MONTHS,
+                    // คอลัมน์ที่ผู้ใช้เพิ่มเอง พร้อม key และชนิด สำหรับแสดงผล
+                    'extras'       => $this->extraColumns->metadata(),
                 ],
             ],
         ]);

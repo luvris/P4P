@@ -42,8 +42,15 @@ class ImportTemplateService
      */
     protected const SAMPLE_ROWS = 1;
 
+    public function __construct(
+        protected PayrollExtraColumnService $extraColumns
+    ) {}
+
     /**
      * สร้างไฟล์ต้นแบบเงินเดือน 39 คอลัมน์ (ใช้ได้ทั้งฝั่ง Finance และ HR)
+     *
+     * ต่อท้ายด้วยคอลัมน์ที่ผู้ใช้ประกาศเพิ่มไว้ในหน้าตั้งค่า ผู้ใช้จึงกรอกตามได้เลย
+     * โดยไม่ต้องแก้ไฟล์เองหรือเดาว่าระบบอ่านคอลัมน์แปลกได้หรือไม่
      */
     public function payrollTemplate(): Spreadsheet
     {
@@ -51,7 +58,7 @@ class ImportTemplateService
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('ข้อมูลเงินเดือน');
 
-        $columns = NewFormatPayrollParser::TEMPLATE_COLUMNS;
+        $columns = $this->extraColumns->columnsWithExtras(NewFormatPayrollParser::TEMPLATE_COLUMNS);
         $sheet->fromArray($columns, null, 'A' . self::HEADER_ROW);
 
         $this->styleHeader($sheet, count($columns));

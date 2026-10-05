@@ -4,8 +4,10 @@ namespace Tests\Feature;
 
 use App\Http\Controllers\Api\ImportTemplateController;
 use App\Services\ImportTemplateService;
+use App\Services\PayrollExtraColumnService;
 use App\Services\NewFormatEmployeeImportService;
 use App\Services\Parsers\NewFormatPayrollParser;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
@@ -16,6 +18,9 @@ use Tests\TestCase;
  */
 class ImportTemplateStreamTest extends TestCase
 {
+    // ต้องมีตาราง payroll_extra_columns เพราะการสร้างไฟล์ต้นแบบไปอ่านคอลัมน์ที่ผู้ใช้เพิ่ม
+    use RefreshDatabase;
+
     private array $tempFiles = [];
 
     protected function tearDown(): void
@@ -49,7 +54,10 @@ class ImportTemplateStreamTest extends TestCase
 
     private function controller(): ImportTemplateController
     {
-        return new ImportTemplateController(app(ImportTemplateService::class));
+        return new ImportTemplateController(
+            app(ImportTemplateService::class),
+            app(PayrollExtraColumnService::class)
+        );
     }
 
     public function test_streamed_payroll_template_parses_without_errors(): void

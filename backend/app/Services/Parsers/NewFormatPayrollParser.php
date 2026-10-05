@@ -2,6 +2,7 @@
 
 namespace App\Services\Parsers;
 
+use App\Models\PayrollExtraColumn;
 use App\Models\ReserveFundCalculation;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 
@@ -168,6 +169,16 @@ class NewFormatPayrollParser
         'total_income', 'note',
     ];
 
+    /**
+     * ค่าคอลัมน์ที่ผู้ใช้เพิ่มเอง (เก็บเป็น array ในแถว แล้ว ImportService
+     * เขียนลง payrolls.extra_data เป็น JSON)
+     *
+     * แยกจาก OUTPUT_FIELDS เพราะค่าเริ่มต้นต้องเป็น null ไม่ใช่ string ว่าง
+     * ถ้าอยู่ใน OUTPUT_FIELDS ลูปเติมค่าว่างจะกลายเป็น string แล้วทำให้
+     * json_encode ได้ค่าผิด
+     */
+    protected const EXTRA_FIELD = 'extra_data';
+
     /** คอลัมน์ที่ขาดแล้วฐานเงินสำรองจะผิด → ใช้เตือนผู้ใช้ */
     protected const REQUIRED_COLUMNS = [
         'ยอดรวมรายรับทั้งหมด รายบุคคล' => 'ยอดรวมรายรับทั้งหมด รายบุคคล',
@@ -201,6 +212,12 @@ class NewFormatPayrollParser
 
     /** field ที่จับคอลัมน์ในไฟล์ล่าสุดได้ → ชื่อคอลัมน์ที่ใช้ */
     protected array $resolvedColumns = [];
+
+    /** ชื่อหัวตาราง (normalize แล้ว) → key ของคอลัมน์เพิ่มเติมที่ประกาศไว้ */
+    protected ?array $extraHeaders = null;
+
+    /** คอลัมน์เพิ่มเติมที่จะอ่านจากไฟล์ — แคชไว้เพื่อไม่ต้อง query ซ้ำในทุกแถว */
+    protected $extraColumns = null;
 
     public function supports(string $extension): bool
     {
@@ -267,9 +284,21 @@ class NewFormatPayrollParser
             }
 
             $record = [];
+            $extra = [];
 
             foreach ($indexes as $field => $index) {
+                if (str_starts_with($field, 'extra:')) {
+                    // คอลัมน์ที่ผู้ใช้เพิ่มเอง — เก็บแยกไว้ ไม่ปนกับ field ปกติ
+                    $extra[substr($field, 6)] = $this->extractValue($row, $index, $field);
+
+                    continue;
+                }
+
                 $record[$field] = $this->extractValue($row, $index, $field);
+            }
+
+            if ($extra !== []) {
+                $record[self::EXTRA_FIELD] = $extra;
             }
 
             // ใส่ค่าว่างของ field ที่ไฟล์ไม่มีคอลัมน์ เพื่อให้ผู้เรียกไม่ต้องเช็ค key ทุกครั้ง
@@ -278,6 +307,9 @@ class NewFormatPayrollParser
                     ? $this->extractValue($row, null, $field)
                     : $record[$field];
             }
+
+            // คีย์นี้ต้องมีเสมอ ไม่งั้นผู้เรียกต้องเช็คเอง และต้องเป็น array ไม่ใช่ string ว่าง
+            $record[self::EXTRA_FIELD] = $extra;
 
             // แถวที่ไม่มีทั้งชื่อและเลขบัตร = แถวรวมยอด/แถวว่าง ไม่ใช่บุคลากร
             // ใช้ ?? '' เพราะคอลัมน์ชื่อ/เลขบัตรอาจไม่มีในไฟล์เลย
@@ -338,6 +370,7 @@ class NewFormatPayrollParser
     protected function matchRow(array $row): array
     {
         $indexes = [];
+        $extraHeaders = $this->extraColumnHeaders();
 
         foreach ($row as $index => $cell) {
             $name = self::normalizeHeader($cell);
@@ -360,10 +393,47 @@ class NewFormatPayrollParser
 
             if ($name === self::MONTH_COLUMN) {
                 $indexes['period_month'] = $index;
+
+                continue;
+            }
+
+            // คอลัมน์ที่ผู้ใช้เพิ่มเอง — จับด้วยชื่อหัวตาราง แล้วเก็บค่าไว้ใต้ key ของคอลัมน์
+            if (isset($extraHeaders[$name])) {
+                $indexes['extra:' . $extraHeaders[$name]] = $index;
             }
         }
 
         return $indexes;
+    }
+
+    /**
+     * หัวตารางของคอลัมน์เพิ่มเติมที่ประกาศไว้: ชื่อที่ normalize แล้ว → key
+     *
+     * @return array<string, string>
+     */
+    protected function extraColumnHeaders(): array
+    {
+        if ($this->extraHeaders !== null) {
+            return $this->extraHeaders;
+        }
+
+        $this->extraHeaders = [];
+
+        foreach ($this->extraColumns() as $column) {
+            $this->extraHeaders[self::normalizeHeader($column->name)] = $column->key;
+        }
+
+        return $this->extraHeaders;
+    }
+
+    /**
+     * คอลัมน์เพิ่มเติมที่จะอ่านจากไฟล์ (ผู้เรียกอาจส่งเข้ามาเอง เช่นตอนทดสอบ)
+     *
+     * @return \Illuminate\Support\Collection<int, \App\Models\PayrollExtraColumn>
+     */
+    protected function extraColumns()
+    {
+        return $this->extraColumns ??= PayrollExtraColumn::active();
     }
 
     /**

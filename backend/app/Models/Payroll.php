@@ -61,10 +61,12 @@ class Payroll extends Model
         'total_deduction',
         'net_income',
         'note',
+        'extra_data',
     ];
 
     protected $casts = [
         'seq_number'          => 'integer',
+        'extra_data'          => 'array',
         'period_month'        => 'integer',
         'period_year'         => 'integer',
         'fiscal_year'         => 'integer',

@@ -5,8 +5,10 @@ import ImportSummary from '../components/features/import/ImportSummary';
 import SelectedFilePanel from '../components/features/import/SelectedFilePanel';
 import PreviewTable from '../components/features/import/PreviewTable';
 import TemplateDownloadButton from '../components/features/import/TemplateDownloadButton';
+import ExtraColumnsPanel from '../components/features/import/ExtraColumnsPanel';
 import { importService } from '../services/importService';
-import { AlertTriangle, Users } from 'lucide-react';
+import { AlertTriangle, Users, SlidersHorizontal } from 'lucide-react';
+import useAuth from '../hooks/useAuth';
 import useFiscalYear from '../hooks/useFiscalYear';
 import { FISCAL_MONTHS, MONTH_LABELS, calendarYearOf, currentMonth } from '../utils/fiscalPeriod';
 
@@ -16,6 +18,10 @@ import { FISCAL_MONTHS, MONTH_LABELS, calendarYearOf, currentMonth } from '../ut
  * คนละชั้นหน้าเดิม (HR / การเงิน) ใช้หน้านี้ร่วมกัน เพราะไฟล์และผลลัพธ์เดียวกัน
  */
 const ImportPage = () => {
+    const { hasRole } = useAuth();
+    // การเพิ่มคอลัมน์กระทบไฟล์ต้นแบบของทุกคน จึงจำกัดไว้ที่ admin
+    const canManageColumns = hasRole('admin');
+
     const [selectedFile, setSelectedFile] = useState(null);
     const [loading, setLoading] = useState(false);
     const [summary, setSummary] = useState(null);
@@ -23,8 +29,9 @@ const ImportPage = () => {
     const [previewData, setPreviewData] = useState([]);
     const [warning, setWarning] = useState('');
     const [unlinkedSummary, setUnlinkedSummary] = useState(null);
+    const [showColumns, setShowColumns] = useState(false);
 
-    // งวดของไฟล์ payroll — ใช้คำนวณเงินสำรองรายปี (เริ่มที่เดือนปัจจุบัน)
+    // งวดของไฟล์ payroll — ใช้คำนวณเงินสำรองรายปี (เริ่มที่เดือนปัจจุ่น)
     const { fiscalYear } = useFiscalYear();
     const [periodMonth, setPeriodMonth] = useState(currentMonth);
 
@@ -98,14 +105,31 @@ const ImportPage = () => {
                     ไฟล์เงินเดือน 39 คอลัมน์ — อัปโหลดครั้งเดียวได้ทั้งทะเบียนบุคลากร
                     และแถวเงินเดือนรายงวด
                 </p>
-                <div className="mt-3">
+                <div className="mt-3 flex flex-wrap items-start gap-2">
                     <TemplateDownloadButton
                         endpoint="/imports/template"
                         label="ดาวน์โหลดแบบฟอร์มกรอกข้อมูล"
                         hint="ไฟล์ต้นแบบ 39 คอลัมน์ — กรอกแล้วอัปโหลดกลับเข้ามาได้เลย"
                     />
+
+                    {canManageColumns && (
+                        <button
+                            type="button"
+                            onClick={() => setShowColumns((v) => !v)}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-[#8B5E3C] px-3 py-2 text-sm font-medium text-[#8B5E3C] transition-colors hover:bg-[#F5EEDC]"
+                        >
+                            <SlidersHorizontal size={15} />
+                            {showColumns ? 'ซ่อนคอลัมน์เพิ่มเติม' : 'จัดการคอลัมน์เพิ่มเติม'}
+                        </button>
+                    )}
                 </div>
             </div>
+
+            {canManageColumns && showColumns && (
+                <div className="mb-6">
+                    <ExtraColumnsPanel />
+                </div>
+            )}
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Left: Drop Zone + Preview Table */}

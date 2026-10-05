@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\ImportController;
 use App\Http\Controllers\Api\ImportTemplateController;
 use App\Http\Controllers\Api\EmployeeController;
 use App\Http\Controllers\Api\ProfileController;
+use App\Http\Controllers\Api\PayrollExtraColumnController;
 use App\Http\Controllers\Api\FiscalYearController;
 use App\Http\Controllers\Api\ReserveFundController;
 use App\Http\Controllers\Api\SalaryAdjustmentController;
@@ -43,7 +44,13 @@ Route::middleware('auth:sanctum')->group(function () {
     // Admin Routes (role: admin)
     // ========================================
     Route::middleware('role:admin')->prefix('admin')->group(function () {
-        // เพิ่ม admin endpoints ที่นี่
+        // คอลัมน์เพิ่มเติมของไฟล์เงินเดือน — admin เท่านั้น เพราะมีผลกับไฟล์ต้นแบบของทุกคน
+        Route::prefix('payroll-extra-columns')->group(function () {
+            Route::get('/',    [PayrollExtraColumnController::class, 'index']);
+            Route::post('/',   [PayrollExtraColumnController::class, 'store']);
+            Route::put('/{column}',  [PayrollExtraColumnController::class, 'update']);
+            Route::delete('/{column}', [PayrollExtraColumnController::class, 'destroy']);
+        });
     });
 
     // ========================================
