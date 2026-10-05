@@ -32,8 +32,19 @@ class NewFormatEmployeeImportService
      */
     public function parse(string $filePath): array
     {
-        $rows = (new NewFormatPayrollParser())->parse($filePath);
+        return $this->summarize((new NewFormatPayrollParser())->parse($filePath));
+    }
 
+    /**
+     * ยุบแถวที่อ่านมาแล้วเป็น 1 แถวต่อคน (งวดล่าสุด)
+     *
+     * แยกจาก parse() เพื่อให้ผู้เรียกที่อ่านไฟล์ไปแล้วใช้ซ้ำได้โดยไม่ต้องอ่านซ้ำ
+     *
+     * @param  array<int, array<string, mixed>>  $rows  แถวดิบจาก parser
+     * @return array{data: array<int, array<string, mixed>>, warnings: array<int, string>}
+     */
+    public function summarize(array $rows): array
+    {
         $latest = [];
         $warnings = [];
 

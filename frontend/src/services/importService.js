@@ -5,11 +5,11 @@ import api from './api';
  */
 const UPLOAD_TIMEOUT = 180000;
 
-export const importService = {
+export const importService = {  // ไฟล์เดียวได้ทั้งทะเบียนบุคลากรและแถวเงินเดือน
   /**
    * อัปโหลดไฟล์
    * @param {File} file
-   * @param {{fiscal_year?: number, period_month?: number}} [period] งวดของไฟล์ payroll
+   * @param {{fiscal_year?: number, period_month?: number}} [period] งวดสำรอง (ไฟล์ที่มีคอลัมน์ปี/เดือนจะใช้ของแต่ละแถวแทน)
    */
   uploadFile: async (file, period = {}) => {
     const formData = new FormData();
@@ -17,7 +17,7 @@ export const importService = {
     if (period?.period_month) formData.append('period_month', period.period_month);
     if (period?.fiscal_year) formData.append('fiscal_year', period.fiscal_year);
 
-    const response = await api.post('/finance/imports', formData, {
+    const response = await api.post('/imports', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -31,7 +31,7 @@ export const importService = {
    * ดูประวัติการ import
    */
   getImports: async (page = 1) => {
-    const response = await api.get(`/finance/imports?page=${page}`);
+    const response = await api.get(`/imports?page=${page}`);
     return response.data;
   },
 
@@ -39,7 +39,7 @@ export const importService = {
    * ดูรายละเอียด import
    */
   getImportDetail: async (id) => {
-    const response = await api.get(`/finance/imports/${id}`);
+    const response = await api.get(`/imports/${id}`);
     return response.data;
   },
 };

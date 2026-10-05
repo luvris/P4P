@@ -101,7 +101,7 @@ const FileDropZone = ({ onFileSelect, selectedFile, onClear }) => {
           <input
             ref={fileInputRef}
             type="file"
-            accept=".xlsx,.xls,.txt"
+            accept=".xlsx,.xls"
             onChange={handleFileInput}
             className="hidden"
           />
@@ -109,7 +109,7 @@ const FileDropZone = ({ onFileSelect, selectedFile, onClear }) => {
 
         {/* Hint */}
         <div className="text-sm text-gray-500">
-          รองรับไฟล์ Excel (.xlsx) และ Text (.txt) ขนาดไม่เกิน 10 MB
+          รองรับไฟล์ Excel (.xlsx) ขนาดไม่เกิน 10 MB
         </div>
       </div>
     </div>

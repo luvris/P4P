@@ -154,8 +154,9 @@ class ImportTemplateTest extends TestCase
 
     public function test_finance_can_download_the_payroll_template(): void
     {
+        // หน้าอัปโหลดย้ายมากลาง ใช้ได้ทุก role — การเงินต้องยังดาวน์โหลดได้
         $response = $this->actingAs($this->user('finance', 'tpl_finance'))
-            ->get('/api/finance/imports/template');
+            ->get('/api/imports/template');
 
         $response->assertOk();
         $response->assertHeader('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -164,28 +165,37 @@ class ImportTemplateTest extends TestCase
     public function test_hr_can_download_the_payroll_template(): void
     {
         $this->actingAs($this->user('hr', 'tpl_hr'))
-            ->get('/api/hr/imports/template')
+            ->get('/api/imports/template')
             ->assertOk();
     }
 
     public function test_template_download_requires_login(): void
     {
-        $this->get('/api/finance/imports/template')->assertUnauthorized();
-        $this->get('/api/hr/imports/template')->assertUnauthorized();
+        $this->get('/api/imports/template')->assertUnauthorized();
     }
 
     public function test_template_route_is_not_treated_as_an_import_id(): void
     {
         // "template" เป็นคำที่ไม่ใช่ตัวเลข ต้องไม่ไปตกที่ /imports/{import}
         $this->actingAs($this->user('finance', 'tpl_finance2'))
-            ->get('/api/finance/imports/template')
+            ->get('/api/imports/template')
             ->assertOk();
+    }
+
+    public function test_the_old_department_specific_import_routes_are_gone(): void
+    {
+        // หน้าอัปโหลดรวมแล้ว ต้องไม่เหลือ route แยกตามแผนกที่หลอกว่ายังใช้ได้
+        foreach (['/api/hr/imports/template', '/api/finance/imports/template'] as $route) {
+            $this->actingAs($this->user('admin', 'tpl_gone_' . md5($route)))
+                ->getJson($route)
+                ->assertNotFound();
+        }
     }
 
     public function test_columns_endpoint_lists_the_template_columns(): void
     {
         $response = $this->actingAs($this->user('hr', 'tpl_hr3'))
-            ->getJson('/api/hr/imports/template/columns');
+            ->getJson('/api/imports/template/columns');
 
         $response->assertOk()
             ->assertJsonPath('data.payroll.columns', NewFormatPayrollParser::TEMPLATE_COLUMNS)

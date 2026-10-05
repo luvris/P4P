@@ -1,10 +1,11 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import LoginPage from './pages/LoginPage';
 import ImportPage from './pages/ImportPage';
+
 import EmployeePage from './pages/Employee';
 import ReserveFundPage from './pages/ReserveFund';
 import SalaryAdjustmentPage from './pages/SalaryAdjustment';
-import HrImportPage from './pages/HrImportPage';
+
 import ClaimListPage from './pages/TravelExpenseClaim/ClaimListPage';
 import ProfilePage from './pages/ProfilePage';
 import ClaimFormPage from './pages/TravelExpenseClaim/ClaimFormPage';
@@ -69,29 +70,23 @@ function App() {
           }
         />
 
-        {/* HR — นำเข้าข้อมูลบุคลากร */}
-        <Route
-          path="/hr/import"
-          element={
-            <ProtectedRoute allowedRoles={['admin', 'hr']}>
-              <DashboardLayout title="นำเข้าข้อมูลบุคลากร">
-                <HrImportPage />
-              </DashboardLayout>
-            </ProtectedRoute>
-          }
-        />
+        
 
-        {/* Finance — นำเข้าข้อมูลการเงิน */}
+        {/* นำเข้าข้อมูล — ไฟล์เดียวได้ทั้งทะเบียนบุคลากรและแถวเงินเดือน
+            ใช้ได้ทุก role เพราะผลลัพธ์เดียวกัน ไม่ต้องแยกตามแผนก */}
         <Route
-          path="/finance/import"
+          path="/import"
           element={
-            <ProtectedRoute allowedRoles={['admin', 'finance']}>
-              <DashboardLayout title="นำเข้าข้อมูลการเงิน">
+            <ProtectedRoute allowedRoles={['admin', 'hr', 'finance']}>
+              <DashboardLayout title="นำเข้าข้อมูล">
                 <ImportPage />
               </DashboardLayout>
             </ProtectedRoute>
           }
         />
+        {/* ลิงก์เดิม — คงไว้ไม่ให้ URL ที่แชร์กันไว้พัง */}
+        <Route path="/hr/import" element={<Navigate to="/import" replace />} />
+        <Route path="/finance/import" element={<Navigate to="/import" replace />} />
 
         {/* Finance — จัดทำใบเบิกค่าใช้จ่ายเดินทางไปราชการ */}
         <Route

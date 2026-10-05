@@ -150,9 +150,9 @@ class ImportTemplateRoundTripTest extends TestCase
         $data = app(NewFormatEmployeeImportService::class)->parse($this->filledTemplate());
         $this->assertCount(2, $data['data']);
 
-        // ลงทะเบียนผ่าน HTTP ตาม flow จริง
+        // ลงทะเบียนผ่าน HTTP ตาม flow จริง (หน้าอัปโหลดเดียว ใช้ได้ทุก role)
         $response = $this->actingAs($this->hr)
-            ->post('/api/hr/imports', [
+            ->post('/api/imports', [
                 'file' => \Illuminate\Http\UploadedFile::fake()->createWithContent(
                     'filled.xlsx',
                     file_get_contents($this->filledTemplate())
@@ -160,6 +160,11 @@ class ImportTemplateRoundTripTest extends TestCase
             ]);
 
         $response->assertCreated();
+
+        // ไฟล์เดียวต้องได้ทั้งทะเบียนบุคลากรและแถวเงินเดือน
+        $this->assertNotNull($response->json('employee'));
+        $this->assertSame(2, $response->json('employee.total'));
+        $this->assertGreaterThan(0, $response->json('payroll.success_rows'));
 
         $this->assertSame(2, Employee::count());
         $employee = Employee::where('citizen_id', '1000000000001')->first();

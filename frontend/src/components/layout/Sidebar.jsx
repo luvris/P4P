@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { LayoutDashboard, Users, Wallet, ChevronDown, ChevronRight } from 'lucide-react';
+import { LayoutDashboard, Users, Wallet, Upload, ChevronDown, ChevronRight } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import useAuth from '../../hooks/useAuth';
 import logo from '../../assets/logo-m.png';
@@ -18,6 +18,14 @@ const Sidebar = ({ isOpen = true, onClose }) => {
             roles: ['admin', 'hr', 'finance'],
         },
         {
+            // ไฟล์เดียวได้ทั้งทะเบียนบุคลากรและแถวเงินเดือน จึงอยู่ระดับบนสุด
+            // ให้ทุก role ใช้ร่วมกัน ไม่ต้องซ้ำสองฝั่ง
+            name: 'นำเข้าข้อมูล',
+            icon: Upload,
+            path: '/import',
+            roles: ['admin', 'hr', 'finance'],
+        },
+        {
             name: 'บริหารงานบุคคล',
             icon: Users,
             path: '#',
@@ -26,16 +34,15 @@ const Sidebar = ({ isOpen = true, onClose }) => {
                 // { name: 'รายชื่อบุคลากร', path: '/hr' },
                 { name: 'คำนวณเงินสำรอง', path: '/hr/reserve-fund' },
                 { name: 'ปรับฐานเงินเดือน', path: '/hr/salary-adjustments' },
-                { name: 'นำเข้าข้อมูลบุคลากร', path: '/hr/import' },
+                
             ],
         },
         {
             name: 'งานการเงิน',
             icon: Wallet,
-            path: '/finance/import',
+            path: '/finance/travel-expense-claims',
             roles: ['admin', 'finance'],
             children: [
-                { name: 'นำเข้าข้อมูลการเงิน', path: '/finance/import' },
                 { name: 'จัดทำใบเบิกค่าใช้จ่าย', path: '/finance/travel-expense-claims' },
             ],
         },

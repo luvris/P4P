@@ -142,7 +142,7 @@ class PayrollUnlinkedRowsTest extends TestCase
         );
 
         $controller = new \App\Http\Controllers\Api\ImportController(
-            app(ImportService::class)
+            app(\App\Services\PayrollFileImportService::class)
         );
 
         $reflection = new \ReflectionClass($controller);
@@ -150,7 +150,7 @@ class PayrollUnlinkedRowsTest extends TestCase
         $method = $reflection->getMethod('store');
         $method->setAccessible(true);
 
-        $request = \Illuminate\Http\Request::create('/api/finance/imports', 'GET', [
+        $request = \Illuminate\Http\Request::create('/api/imports', 'GET', [
             'uploader' => $this->finance,
         ]);
         $request->setUserResolver(fn () => $this->finance);

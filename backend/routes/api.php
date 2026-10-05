@@ -4,7 +4,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ImportController;
-use App\Http\Controllers\Api\HrImportController;
 use App\Http\Controllers\Api\ImportTemplateController;
 use App\Http\Controllers\Api\EmployeeController;
 use App\Http\Controllers\Api\ProfileController;
@@ -73,17 +72,6 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::put('/{employee}',     [EmployeeController::class, 'update']);
         });
 
-        // นำเข้าข้อมูลบุคลากร (HR Import) — แยกจาก payroll import
-        Route::prefix('imports')->group(function () {
-            Route::post('/preview', [HrImportController::class, 'preview']);
-            Route::post('/',        [HrImportController::class, 'store']);
-            Route::get('/',         [HrImportController::class, 'index']);
-
-            // ดาวน์โหลดแบบฟอร์มกรอกข้อมูล — ไฟล์เดียวกับฝั่งการเงิน
-            Route::get('/template', [ImportTemplateController::class, 'payroll']);
-            Route::get('/template/columns', [ImportTemplateController::class, 'columns']);
-        });
-
         // เงินสำรอง (คำนวณจาก payroll — ต้องระบุเปอร์เซ็นต์เอง)
         Route::get('/reserve-fund',          [ReserveFundController::class, 'summary']);
         Route::get('/reserve-fund/imports',  [ReserveFundController::class, 'imports']);
@@ -111,18 +99,25 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     // ========================================
+    // การนำเข้าไฟล์เงินเดือน (role: admin, hr, finance)
+    // ========================================
+    // ไฟล์เดียวให้ทั้งทะเบียนบุคลากรและแถวเงินเดือน จึงไม่ต้องแยกตามแผนก
+    Route::middleware('role:admin,hr,finance')->prefix('imports')->group(function () {
+        Route::post('/preview', [ImportController::class, 'preview']);
+        Route::post('/',        [ImportController::class, 'store']);
+        Route::get('/',         [ImportController::class, 'index']);
+
+        // ต้องประกาศก่อน /{import} ไม่อย่างนั้น "template" จะถูกตีความเป็น id
+        Route::get('/template',         [ImportTemplateController::class, 'payroll']);
+        Route::get('/template/columns', [ImportTemplateController::class, 'columns']);
+
+        Route::get('/{import}', [ImportController::class, 'show']);
+    });
+
+    // ========================================
     // Finance Routes (role: admin, finance)
     // ========================================
     Route::middleware('role:admin,finance')->prefix('finance')->group(function () {
-        Route::post('/imports',           [ImportController::class, 'store']);
-        Route::get('/imports',            [ImportController::class, 'index']);
-
-        // ต้องประกาศก่อน /imports/{import} ไม่อย่างนั้น "template" จะถูกตีความเป็น id
-        Route::get('/imports/template',         [ImportTemplateController::class, 'payroll']);
-        Route::get('/imports/template/columns', [ImportTemplateController::class, 'columns']);
-
-        Route::get('/imports/{import}',   [ImportController::class, 'show']);
-
         // ใบเบิกค่าใช้จ่ายเดินทางไปราชการ
         Route::prefix('travel-expense-claims')->group(function () {
             // route คงที่ต้องมาก่อน {claim} เพื่อไม่ให้ถูกจับเป็น parameter

@@ -9,13 +9,15 @@ use App\Services\Parsers\XlsxParser;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
+
 class ImportService
 {
     /** เก็บ row_errors ได้ไม่เกินกี่รายการ (กัน JSON บวม) */
     protected const MAX_ROW_ERRORS = 50;
 
     public function __construct(
-        protected PayrollLinkageInspector $linkageInspector
+        protected PayrollLinkageInspector $linkageInspector,
+        protected PayrollExtraColumnService $extraColumns
     ) {}
 
     /**
@@ -52,16 +54,24 @@ class ImportService
      * ประมวลผลการอัปโหลดไฟล์
      *
      * @param  object|null  $parser  ส่ง parser ที่ parse ไปแล้วรอบหนึ่งได้ เพื่อไม่ต้องอ่านไฟล์ซ้ำ
+     * @param  string|null  $storedPath  พาธที่เก็บไฟล์จริงใน storage (ถ้ารู้) — ใช้บันทึกลง imports
+     *                                             ให้ชี้ไฟล์เดียวกับฝั่งทะเบียนบุคลากร
      * @param  array|null  $period  งวดของข้อมูล { fiscal_year, period_month, period_year }
      */
-    public function process(string $filePath, string $fileName, int $userId, ?object $parser = null, ?array $period = null): Import
-    {
+    public function process(
+        string $filePath,
+        string $fileName,
+        int $userId,
+        ?object $parser = null,
+        ?array $period = null,
+        ?string $storedPath = null
+    ): Import {
         $extension = pathinfo($fileName, PATHINFO_EXTENSION);
 
         // สร้าง record การ import
         $import = Import::create([
             'file_name' => $fileName,
-            'file_path' => $filePath,
+            'file_path' => $storedPath ?? $filePath,
             'file_type' => strtolower($extension),
             'uploaded_by' => $userId,
             'status' => 'processing',
@@ -166,7 +176,15 @@ class ImportService
                         continue;
                     }
 
-                    Payroll::create(array_merge($row, [
+                    // ค่าคอลัมน์ที่ผู้ใช้เพิ่มเอง — กรองให้เหลือเฉพาะคอลัมน์ที่ประกาศไว้
+                    // และแปลงตามชนิด ค่าที่ไม่ผ่านการตรวจจะถูกทิ้งไปแทนที่จะเขียนข้อมูลเสีย
+                    $attributes = $row;
+
+                    if (isset($row['extra_data'])) {
+                        $attributes['extra_data'] = $this->extraColumns->normalizeValues($row['extra_data']) ?: null;
+                    }
+
+                    Payroll::create(array_merge($attributes, [
                         'import_id' => $import->id,
                     ]));
 

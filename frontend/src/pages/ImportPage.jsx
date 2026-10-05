@@ -6,29 +6,42 @@ import SelectedFilePanel from '../components/features/import/SelectedFilePanel';
 import PreviewTable from '../components/features/import/PreviewTable';
 import TemplateDownloadButton from '../components/features/import/TemplateDownloadButton';
 import { importService } from '../services/importService';
-import { AlertTriangle, Link2Off } from 'lucide-react';
+import { AlertTriangle, Users } from 'lucide-react';
 import useFiscalYear from '../hooks/useFiscalYear';
 import { FISCAL_MONTHS, MONTH_LABELS, calendarYearOf, currentMonth } from '../utils/fiscalPeriod';
 
+/**
+ * อัปโหลดไฟล์เงินเดือน — ได้ทั้งทะเบียนบุคลากรและแถวเงินเดือนจากไฟล์เดียว
+ *
+ * คนละชั้นหน้าเดิม (HR / การเงิน) ใช้หน้านี้ร่วมกัน เพราะไฟล์และผลลัพธ์เดียวกัน
+ */
 const ImportPage = () => {
     const [selectedFile, setSelectedFile] = useState(null);
     const [loading, setLoading] = useState(false);
     const [summary, setSummary] = useState(null);
+    const [employeeResult, setEmployeeResult] = useState(null);
     const [previewData, setPreviewData] = useState([]);
     const [warning, setWarning] = useState('');
-    const [linkWarnings, setLinkWarnings] = useState([]);
     const [unlinkedSummary, setUnlinkedSummary] = useState(null);
 
     // งวดของไฟล์ payroll — ใช้คำนวณเงินสำรองรายปี (เริ่มที่เดือนปัจจุบัน)
     const { fiscalYear } = useFiscalYear();
     const [periodMonth, setPeriodMonth] = useState(currentMonth);
 
+    const reset = () => {
+        setSummary(null);
+        setEmployeeResult(null);
+        setPreviewData([]);
+        setWarning('');
+        setUnlinkedSummary(null);
+    };
+
     const handleFileSelect = (file) => {
-        const validExtensions = ['xlsx', 'xls', 'txt'];
+        const validExtensions = ['xlsx', 'xls'];
         const extension = file.name.split('.').pop().toLowerCase();
 
         if (!validExtensions.includes(extension)) {
-            toast.error('รองรับเฉพาะไฟล์ .xlsx, .xls, .txt');
+            toast.error('รองรับเฉพาะไฟล์ .xlsx หรือ .xls');
             return;
         }
 
@@ -38,18 +51,12 @@ const ImportPage = () => {
         }
 
         setSelectedFile(file);
-        setSummary(null);
-        setPreviewData([]);
-        setWarning('');
-        setLinkWarnings([]);
+        reset();
     };
 
     const handleClear = () => {
         setSelectedFile(null);
-        setSummary(null);
-        setPreviewData([]);
-        setWarning('');
-        setLinkWarnings([]);
+        reset();
     };
 
     const handleImport = async () => {
@@ -63,9 +70,9 @@ const ImportPage = () => {
             });
 
             setSummary(result.import);
+            setEmployeeResult(result.employee || null);
             setPreviewData(result.preview || []);
             setWarning(result.warning || '');
-            setLinkWarnings(result.link_warnings || []);
             setUnlinkedSummary(result.unlinked_summary || null);
 
             if (result.warning) {
@@ -73,7 +80,6 @@ const ImportPage = () => {
             } else {
                 toast.success('นำเข้าข้อมูลสำเร็จ!');
             }
-
         } catch (error) {
             const message = error.response?.data?.message || 'เกิดข้อผิดพลาด';
             toast.error(message);
@@ -84,19 +90,19 @@ const ImportPage = () => {
 
     return (
         <div className="max-w-7xl mx-auto">
-            {/* Header ของหน้า (optional — Header หลักมีอยู่แล้ว) */}
             <div className="mb-6">
                 <h2 className="text-2xl font-bold text-[#8B5E3C] mb-1">
-                    นำเข้าข้อมูลการเงิน
+                    นำเข้าข้อมูล
                 </h2>
                 <p className="text-gray-500 text-sm">
-                    รองรับไฟล์ Excel (.xlsx) และ Text (.txt)
+                    ไฟล์เงินเดือน 39 คอลัมน์ — อัปโหลดครั้งเดียวได้ทั้งทะเบียนบุคลากร
+                    และแถวเงินเดือนรายงวด
                 </p>
                 <div className="mt-3">
                     <TemplateDownloadButton
-                        endpoint="/finance/imports/template"
+                        endpoint="/imports/template"
                         label="ดาวน์โหลดแบบฟอร์มกรอกข้อมูล"
-                        hint="ไฟล์ต้นแบบ 39 คอลัมน์ — กรอกแล้วอัปกลับเข้ามาได้เลย ใช้ไฟล์เดียวกันนี้กับฝั่งบุคลากรได้ด้วย"
+                        hint="ไฟล์ต้นแบบ 39 คอลัมน์ — กรอกแล้วอัปโหลดกลับเข้ามาได้เลย"
                     />
                 </div>
             </div>
@@ -141,7 +147,8 @@ const ImportPage = () => {
                                 ))}
                             </select>
                             <p className="mt-2 text-xs text-gray-500">
-                                ปีงบประมาณ {fiscalYear} — ใช้ในการคำนวณเงินสำรองรายปี
+                                ไฟล์ที่มีคอลัมน์ปี/เดือนจะใช้งวดของแต่ละแถวจริง
+                                ค่านี้เป็นเพียงงวดสำรอง
                             </p>
                         </div>
                     )}
@@ -162,6 +169,18 @@ const ImportPage = () => {
                         </div>
                     )}
 
+                    {employeeResult && (
+                        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                            <div className="flex items-center gap-2 text-sm font-medium text-emerald-900">
+                                <Users className="h-4 w-4 shrink-0" />
+                                <span>
+                                    ทะเบียนบุคลากร: เพิ่มใหม่ {employeeResult.inserted.toLocaleString()}
+                                    {' / '}อัปเดต {employeeResult.updated.toLocaleString()} คน
+                                </span>
+                            </div>
+                        </div>
+                    )}
+
                     {unlinkedSummary && unlinkedSummary.rows > 0 && (
                         <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4">
                             <div className="flex items-center gap-2 text-sm font-medium text-amber-900">
@@ -174,7 +193,7 @@ const ImportPage = () => {
                             </div>
                             <p className="mt-1 text-xs text-amber-800">
                                 ข้อมูลถูกนำเข้าเรียบร้อยแล้ว แต่ต้องมีเลขบัตรประชาชนที่ตรงกับทะเบียนบุคลากร
-                                จึงจะถูกนับ — กรุณาส่งไฟล์นี้ไปที่เมนู “นำเข้าข้อมูลบุคลากร” อีกครั้ง หรือแก้เลขบัตรในไฟล์ให้ถูกต้อง
+                                จึงจะถูกนับ — กรุณาตรวจสอบเลขบัตรในไฟล์ให้ถูกต้อง แล้วอัปโหลดไฟล์เดิมซ้ำอีกครั้ง
                             </p>
                             {unlinkedSummary.samples?.length > 0 && (
                                 <details className="mt-2">
@@ -196,33 +215,6 @@ const ImportPage = () => {
                                     </ul>
                                 </details>
                             )}
-                        </div>
-                    )}
-
-                    {linkWarnings.length > 0 && (
-                        <div className="rounded-2xl border border-red-200 bg-red-50 p-4">
-                            <div className="flex items-center gap-2 text-sm font-medium text-red-800">
-                                <Link2Off className="h-4 w-4 shrink-0" />
-                                <span>
-                                    พบ {linkWarnings.length.toLocaleString()} แถวที่เลขบัตรประชาชนไม่ตรงกับทะเบียนบุคลากร
-                                </span>
-                            </div>
-                            <p className="mt-1 text-xs text-red-700">
-                                คนเหล่านี้จะไม่ถูกนับในเงินสำรองและไม่รู้สังกัด กรุณาตรวจสอบก่อนสรุปยอด
-                            </p>
-                            <ul className="mt-3 max-h-64 space-y-2 overflow-y-auto">
-                                {linkWarnings.map((item, i) => (
-                                    <li
-                                        key={i}
-                                        className="rounded-lg border border-red-200 bg-white px-3 py-2 text-xs text-gray-700"
-                                    >
-                                        <span className="mr-1 font-medium text-red-700">
-                                            แถว {item.row ?? '-'}
-                                        </span>
-                                        {item.error}
-                                    </li>
-                                ))}
-                            </ul>
                         </div>
                     )}
 
