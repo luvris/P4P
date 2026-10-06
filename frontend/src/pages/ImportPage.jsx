@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import FileDropZone from '../components/features/import/FileDropZone';
 import ImportSummary from '../components/features/import/ImportSummary';
@@ -30,6 +30,30 @@ const ImportPage = () => {
     const [warning, setWarning] = useState('');
     const [unlinkedSummary, setUnlinkedSummary] = useState(null);
     const [showColumns, setShowColumns] = useState(false);
+
+    // งวดที่ export — ดึงจากระบบเพื่อไม่ให้เลือกงวดที่ยังไม่มีข้อมูลจริง
+    const [periods, setPeriods] = useState([]);
+    const [exportPeriod, setExportPeriod] = useState('');
+
+    useEffect(() => {
+        let active = true;
+
+        importService.getPeriods()
+            .then((result) => {
+                if (!active) return;
+
+                const list = result.data || [];
+                setPeriods(list);
+                // ค่าเริ่มต้นเป็นงวดใหม่สุดที่มีข้อมูล
+                setExportPeriod(list[0] ? `${list[0].period_year}-${list[0].period_month}` : '');
+            })
+            .catch(() => {
+                // ไม่มีงวดให้เลือก = ยัง export ไม่ได้ ปุ่มจะไม่แสดง
+                if (active) setPeriods([]);
+            });
+
+        return () => { active = false; };
+    }, []);
 
     // งวดของไฟล์ payroll — ใช้คำนวณเงินสำรองรายปี (เริ่มที่เดือนปัจจุ่น)
     const { fiscalYear } = useFiscalYear();
@@ -111,6 +135,42 @@ const ImportPage = () => {
                         label="ดาวน์โหลดแบบฟอร์มกรอกข้อมูล"
                         hint="ไฟล์ต้นแบบ 39 คอลัมน์ — กรอกแล้วอัปโหลดกลับเข้ามาได้เลย"
                     />
+
+                    {periods.length > 0 && exportPeriod && (
+                        <div className="flex flex-wrap items-end gap-2">
+                            <div>
+                                <label
+                                    htmlFor="export-period"
+                                    className="mb-1 block text-xs font-medium text-gray-600"
+                                >
+                                    งวดที่จะ export
+                                </label>
+                                <select
+                                    id="export-period"
+                                    value={exportPeriod}
+                                    onChange={(e) => setExportPeriod(e.target.value)}
+                                    className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 focus:border-[#C5A059] focus:outline-none focus:ring-1 focus:ring-[#C5A059]"
+                                >
+                                    {periods.map((period) => (
+                                        <option
+                                            key={`${period.period_year}-${period.period_month}`}
+                                            value={`${period.period_year}-${period.period_month}`}
+                                        >
+                                            {period.label} ({period.rows} คน)
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <TemplateDownloadButton
+                                endpoint={importService.exportUrl(periods.find(
+                                    (p) => `${p.period_year}-${p.period_month}` === exportPeriod,
+                                ) || periods[0])}
+                                label="Export ข้อมูล"
+                                hint="หัวตารางเดียวกับแบบฟอร์ม แต่มีข้อมูลของงวดที่เลือกอยู่แล้ว — แก้แล้วอัปโหลดกลับได้"
+                            />
+                        </div>
+                    )}
 
                     {canManageColumns && (
                         <button

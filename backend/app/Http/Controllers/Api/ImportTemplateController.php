@@ -5,7 +5,9 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Services\ImportTemplateService;
 use App\Services\Parsers\NewFormatPayrollParser;
+use App\Services\PayrollExportService;
 use App\Services\PayrollExtraColumnService;
+use Illuminate\Http\Request;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx as XlsxWriter;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -19,7 +21,8 @@ class ImportTemplateController extends Controller
 {
     public function __construct(
         protected ImportTemplateService $templates,
-        protected PayrollExtraColumnService $extraColumns
+        protected PayrollExtraColumnService $extraColumns,
+        protected PayrollExportService $exports
     ) {}
 
     /**
@@ -32,6 +35,35 @@ class ImportTemplateController extends Controller
             $this->templates->payrollTemplate(),
             'แบบฟอร์มนำเข้าข้อมูลเงินเดือน.xlsx'
         );
+    }
+
+    /**
+     * GET /api/imports/export?period_month=1&period_year=2569
+     * ไฟล์ข้อมูลจริง หัวตารางเดียวกับแบบฟอร์ม แต่แถวแรกเป็นข้อมูลของงวดที่เลือก
+     */
+    public function export(Request $request): StreamedResponse
+    {
+        $validated = $request->validate([
+            'period_month' => ['required', 'integer', 'between:1,12'],
+            'period_year'  => ['required', 'integer', 'between:2500,3000'],
+        ]);
+
+        $month = (int) $validated['period_month'];
+        $year = (int) $validated['period_year'];
+
+        return $this->stream(
+            $this->exports->export($month, $year)['spreadsheet'],
+            $this->exports->fileName($month, $year)
+        );
+    }
+
+    /**
+     * GET /api/imports/periods
+     * งวดที่มีข้อมูลในระบบ — ปุ่ม export ใช้เป็นตัวเลือกงวด
+     */
+    public function periods(): \Illuminate\Http\JsonResponse
+    {
+        return response()->json(['data' => $this->exports->periods()]);
     }
 
     /**

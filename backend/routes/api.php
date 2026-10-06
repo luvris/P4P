@@ -118,6 +118,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/template',         [ImportTemplateController::class, 'payroll']);
         Route::get('/template/columns', [ImportTemplateController::class, 'columns']);
 
+        // ส่งออกข้อมูลจริงเป็นไฟล์หัวตารางเดียวกับแบบฟอร์ม
+        Route::get('/export',           [ImportTemplateController::class, 'export']);
+        Route::get('/periods',          [ImportTemplateController::class, 'periods']);
+
         Route::get('/{import}', [ImportController::class, 'show']);
     });
 

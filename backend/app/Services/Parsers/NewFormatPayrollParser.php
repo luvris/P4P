@@ -186,6 +186,18 @@ class NewFormatPayrollParser
     ];
 
     /**
+     * field ของ payrolls ที่คอลัมน์นี้เก็บไว้ (ย้อนกลับจาก COLUMN_MAP ที่ parser ใช้อ่าน)
+     *
+     * ใช้ตอน export เพื่อไม่ต้องมีแผนที่ชื่อคอลัมน์ครั้งที่สองที่อาจหลุดจากของเดิม
+     *
+     * @return string|null  คืน null ถ้าคอลัมน์นี้ไม่ได้เก็บค่าไว้ใน payrolls
+     */
+    public static function fieldForColumn(string $column): ?string
+    {
+        return self::COLUMN_MAP[self::normalizeHeader($column)] ?? null;
+    }
+
+    /**
      * ชื่อเดือนที่ parser รับได้ทั้งหมด (ชื่อเต็มและตัวย่อ)
      *
      * @return array<int, string>

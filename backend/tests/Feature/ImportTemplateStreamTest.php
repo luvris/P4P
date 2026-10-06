@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Http\Controllers\Api\ImportTemplateController;
 use App\Services\ImportTemplateService;
+use App\Services\PayrollExportService;
 use App\Services\PayrollExtraColumnService;
 use App\Services\NewFormatEmployeeImportService;
 use App\Services\Parsers\NewFormatPayrollParser;
@@ -56,7 +57,8 @@ class ImportTemplateStreamTest extends TestCase
     {
         return new ImportTemplateController(
             app(ImportTemplateService::class),
-            app(PayrollExtraColumnService::class)
+            app(PayrollExtraColumnService::class),
+            app(PayrollExportService::class)
         );
     }
 

@@ -28,6 +28,22 @@ export const importService = {  // ไฟล์เดียวได้ทั้
   },
 
   /**
+   * งวดที่มีข้อมูลในระบบ ใช้เป็นตัวเลือกงวดของปุ่ม export (งวดใหม่สุดมาก่อน)
+   */
+  getPeriods: async () => {
+    const response = await api.get('/imports/periods');
+    return response.data;
+  },
+
+  /**
+   * ที่อยู่ไฟล์ export — ใช้กับ TemplateDownloadButton ที่รับ endpoint เป็นข้อความ
+   *
+   * @param {{period_year: number, period_month: number}} period
+   */
+  exportUrl: (period) =>
+    `/imports/export?period_year=${period.period_year}&period_month=${period.period_month}`,
+
+  /**
    * ดูประวัติการ import
    */
   getImports: async (page = 1) => {

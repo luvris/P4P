@@ -9,6 +9,7 @@ use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx as XlsxWriter;
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
 /**
  * สร้างไฟล์ต้นแบบสำหรับนำเข้าข้อมูล
@@ -24,6 +25,9 @@ class ImportTemplateService
     protected const HEADER_ROW = 1;
 
     protected const FIRST_DATA_ROW = 3; // แถว 1 = หัวตาราง, แถว 2 = ตัวอย่าง
+
+    /** ไฟล์ export ไม่มีแถวตัวอย่าง ข้อมูลจริงจึงเริ่มที่แถว 2 */
+    protected const EXPORT_FIRST_DATA_ROW = 2;
 
     /** สีหัวตาราง */
     protected const HEADER_FILL = 'FF1F4E79';
@@ -55,26 +59,11 @@ class ImportTemplateService
     public function payrollTemplate(): Spreadsheet
     {
         $spreadsheet = new Spreadsheet();
-        $sheet = $spreadsheet->getActiveSheet();
-        $sheet->setTitle('ข้อมูลเงินเดือน');
 
         $columns = $this->extraColumns->columnsWithExtras(NewFormatPayrollParser::TEMPLATE_COLUMNS);
-        $sheet->fromArray($columns, null, 'A' . self::HEADER_ROW);
+        $sheet = $this->sheetWithDataHeaders($spreadsheet, $columns, self::FIRST_DATA_ROW);
 
-        $this->styleHeader($sheet, count($columns));
-
-        // กรอง/ตรึงแถวหัวตารางไว้ เพื่อไม่ให้ผู้ใช้ลากทัน
-        $sheet->freezePane('A' . self::FIRST_DATA_ROW);
-
-        // ตั้งความกว้างให้อ่านง่าย
-        foreach ($columns as $i => $name) {
-            $sheet->getColumnDimension(Coordinate::stringFromColumnIndex($i + 1))
-                ->setWidth($this->columnWidth($name));
-        }
-
-        $this->markRequiredColumns($sheet, $columns);
         $this->addSampleRows($sheet, $columns);
-
         $this->addMonthReferenceSheet($spreadsheet);
         $this->addPayrollInstructions($spreadsheet);
 
@@ -83,6 +72,66 @@ class ImportTemplateService
         $spreadsheet->setActiveSheetIndex(0);
 
         return $spreadsheet;
+    }
+
+    /**
+     * ไฟล์ข้อมูลจริง โครงเดียวกับแบบฟอร์ม แต่แถวแรกเป็นข้อมูลจริงทันที
+     *
+     * ผู้ใช้เอาไปแก้แล้วอัปโหลดกลับเข้ามาได้ เพราะหัวตารางและชนิดค่าเหมือนไฟล์ต้นแบบทุกช่อง
+     *
+     * @param  iterable<int, array<int, mixed>>  $rows  ค่าแต่ละแถวเรียงตาม $columns
+     */
+    public function payrollExport(iterable $rows): Spreadsheet
+    {
+        $spreadsheet = new Spreadsheet();
+
+        $columns = $this->extraColumns->columnsWithExtras(NewFormatPayrollParser::TEMPLATE_COLUMNS);
+
+        // ไม่มีแถวตัวอย่าง ข้อมูลจริงจึงเริ่มต่อจากหัวตารางทันที
+        $sheet = $this->sheetWithDataHeaders($spreadsheet, $columns, self::EXPORT_FIRST_DATA_ROW);
+
+        $rowNumber = self::EXPORT_FIRST_DATA_ROW;
+
+        foreach ($rows as $values) {
+            $sheet->fromArray($values, null, 'A' . $rowNumber);
+            $rowNumber++;
+        }
+
+        $spreadsheet->setActiveSheetIndex(0);
+
+        return $spreadsheet;
+    }
+
+    /**
+     * สร้างชีทข้อมูลพร้อมหัวตาราง ความกว้างคอลัมน์ และสีบอกคอลัมน์สำคัญ
+     *
+     * ใช้ร่วมกันทั้งแบบฟอร์มและไฟล์ export เพื่อให้หัวตารางตรงกันเสมอ
+     *
+     * @param  array<int, string>  $columns
+     */
+    protected function sheetWithDataHeaders(
+        Spreadsheet $spreadsheet,
+        array $columns,
+        int $firstDataRow
+    ): Worksheet {
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('ข้อมูลเงินเดือน');
+        $sheet->fromArray($columns, null, 'A' . self::HEADER_ROW);
+
+        $this->styleHeader($sheet, count($columns));
+
+        // กรอง/ตรึงแถวหัวตารางไว้ เพื่อไม่ให้ผู้ใช้ลากทัน
+        $sheet->freezePane('A' . $firstDataRow);
+
+        // ตั้งความกว้างให้อ่านง่าย
+        foreach ($columns as $i => $name) {
+            $sheet->getColumnDimension(Coordinate::stringFromColumnIndex($i + 1))
+                ->setWidth($this->columnWidth($name));
+        }
+
+        $this->markRequiredColumns($sheet, $columns);
+
+        return $sheet;
     }
 
     /** เขียนไฟล์ต้นแบบลงดิสก์ — ใช้ในเทสต์และสคริปต์ (ดาวน์โหลดจริงใช้ php://temp) */
