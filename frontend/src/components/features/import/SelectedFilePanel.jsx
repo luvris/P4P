@@ -1,11 +1,16 @@
 import React from 'react';
-import { X, Upload } from 'lucide-react';
+import { X, Upload, Files } from 'lucide-react';
 import useAuth from '../../../hooks/useAuth';
 
-const SelectedFilePanel = ({ file, onImport, onCancel, loading }) => {
+const SelectedFilePanel = ({ file, files = [], onImport, onCancel, loading }) => {
     const { user } = useAuth();
 
-    if (!file) return null;
+    // เลือกหลายไฟล์ = นำเข้าทีละไฟล์ จึงสรุปเป็นจำนวนและขนาดรวมแทนรายละเอียดรายไฟล์
+    const list = files.length > 0 ? files : (file ? [file] : []);
+    const isBatch = list.length > 1;
+    const totalSize = list.reduce((sum, item) => sum + item.size, 0);
+
+    if (list.length === 0) return null;
 
     // Format วันที่ปัจจุบัน (พ.ศ.)
     const formatDate = () => {
@@ -40,19 +45,26 @@ const SelectedFilePanel = ({ file, onImport, onCancel, loading }) => {
             </h3>
 
             <div className="space-y-3 mb-6">
-                {/* ชื่อไฟล์ */}
+                {/* ชื่อไฟล์ — หลายไฟล์แสดงจำนวนแทน เพราะรายชื่อยาวและซ้ำกันมาก */}
                 <div className="flex justify-between text-sm gap-2">
                     <span className="text-gray-500 flex-shrink-0">ชื่อไฟล์</span>
-                    <span className="font-medium text-gray-700 truncate text-right">
-                        {file.name}
-                    </span>
+                    {isBatch ? (
+                        <span className="font-medium text-gray-700 flex items-center gap-1.5">
+                            <Files size={14} className="text-[#C5A059]" />
+                            {list.length} ไฟล์
+                        </span>
+                    ) : (
+                        <span className="font-medium text-gray-700 truncate text-right">
+                            {list[0].name}
+                        </span>
+                    )}
                 </div>
 
                 {/* ขนาด */}
                 <div className="flex justify-between text-sm">
                     <span className="text-gray-500">ขนาด</span>
                     <span className="font-medium text-gray-700">
-                        {(file.size / 1024).toFixed(2)} KB
+                        {(totalSize / 1024).toFixed(2)} KB
                     </span>
                 </div>
 
@@ -60,11 +72,17 @@ const SelectedFilePanel = ({ file, onImport, onCancel, loading }) => {
                 <div className="flex justify-between text-sm">
                     <span className="text-gray-500">ประเภท</span>
                     <span className="font-medium text-gray-700">
-                        {file.name.split('.').pop().toUpperCase()}
+                        {(isBatch ? 'EXCEL' : list[0].name.split('.').pop()).toUpperCase()}
                     </span>
                 </div>
 
                 {/* วันที่นำเข้า */}
+                {isBatch && (
+                    <p className="text-xs text-gray-500">
+                        จะนำเข้าไฟล์ละดับ {list.length} ไฟล์ ไฟล์ที่ผิดพลาดจะไม่หยุดไฟล์ที่เหลือ
+                    </p>
+                )}
+
                 <div className="flex justify-between text-sm">
                     <span className="text-gray-500">วันที่นำเข้า</span>
                     <span className="font-medium text-gray-700">

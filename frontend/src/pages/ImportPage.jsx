@@ -2,38 +2,64 @@ import React, { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import FileDropZone from '../components/features/import/FileDropZone';
 import ImportSummary from '../components/features/import/ImportSummary';
+import BatchImportSummary from '../components/features/import/BatchImportSummary';
 import SelectedFilePanel from '../components/features/import/SelectedFilePanel';
 import PreviewTable from '../components/features/import/PreviewTable';
 import TemplateDownloadButton from '../components/features/import/TemplateDownloadButton';
 import ExtraColumnsPanel from '../components/features/import/ExtraColumnsPanel';
+import PeriodScopePicker from '../components/features/import/PeriodScopePicker';
 import { importService } from '../services/importService';
-import { AlertTriangle, Users, SlidersHorizontal, FileSpreadsheet, FileDown } from 'lucide-react';
+import { AlertTriangle, Users, SlidersHorizontal, FileSpreadsheet, FileDown, RotateCcw, Unlink } from 'lucide-react';
 import useAuth from '../hooks/useAuth';
 import useFiscalYear from '../hooks/useFiscalYear';
-import { FISCAL_MONTHS, MONTH_LABELS, calendarYearOf, currentMonth } from '../utils/fiscalPeriod';
+import { currentMonth } from '../utils/fiscalPeriod';
+
+/** ขอบเขตของไฟล์ export — งวดเดียว หรือรวมทั้งปีงบประมาณ (ต.ค. – ก.ย.) */
+const EXPORT_SCOPES = [
+    { value: 'period', label: 'รายงวด' },
+    { value: 'year', label: 'ทั้งปีงบประมาณ' },
+];
+
+/** ขนาดไฟล์สูงสุดต่อไฟล์ (ตรงกับที่ backend ตรวจ) */
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
+
+/** จำนวนไฟล์สูงสุดต่อครั้ง — กันเผลอลากทั้งโฟลเดอร์เข้ามา */
+const MAX_FILES = 12;
+
+/** ข้อความ error จาก Laravel — ภาษาไทยอยู่ใน errors ส่วน message กลางเป็นอังกฤษ */
+const errorMessage = (error) => {
+    const data = error.response?.data;
+    const fieldError = Object.values(data?.errors || {}).flat()[0];
+
+    return fieldError || data?.message || 'เกิดข้อผิดพลาด';
+};
 
 /**
  * อัปโหลดไฟล์เงินเดือน — ได้ทั้งทะเบียนบุคลากรและแถวเงินเดือนจากไฟล์เดียว
  *
  * คนละชั้นหน้าเดิม (HR / การเงิน) ใช้หน้านี้ร่วมกัน เพราะไฟล์และผลลัพธ์เดียวกัน
+ * อัปโหลดได้ทั้งไฟล์เดียว, หลายไฟล์ (ทีละงวด) และไฟล์ที่ครอบคลุมทั้งปีงบประมาณ
  */
 const ImportPage = () => {
     const { hasRole } = useAuth();
     // การเพิ่มคอลัมน์กระทบไฟล์ต้นแบบของทุกคน จึงจำกัดไว้ที่ admin
     const canManageColumns = hasRole('admin');
 
-    const [selectedFile, setSelectedFile] = useState(null);
+    // ไฟล์ที่เลือก (เลือกหลายไฟล์ได้ = แต่ละไฟล์คือหนึ่งงวด)
+    const [selectedFiles, setSelectedFiles] = useState([]);
     const [loading, setLoading] = useState(false);
-    const [summary, setSummary] = useState(null);
-    const [employeeResult, setEmployeeResult] = useState(null);
-    const [previewData, setPreviewData] = useState([]);
-    const [warning, setWarning] = useState('');
-    const [unlinkedSummary, setUnlinkedSummary] = useState(null);
+    // ผลลัพธ์รายไฟล์ — เก็บทั้งหมดเพื่อสรุปตอนอัปโหลดหลายไฟล์
+    const [batchResults, setBatchResults] = useState([]);
     const [showColumns, setShowColumns] = useState(false);
 
     // งวดที่ export — ดึงจากระบบเพื่อไม่ให้เลือกงวดที่ยังไม่มีข้อมูลจริง
     const [periods, setPeriods] = useState([]);
     const [exportPeriod, setExportPeriod] = useState('');
+
+    // ปีงบประมาณที่จะ export — ค่าเริ่มต้นคือปีงบล่าสุดที่มีข้อมูล
+    const [fiscalYears, setFiscalYears] = useState([]);
+    const [exportFiscalYear, setExportFiscalYear] = useState('');
+    const [exportScope, setExportScope] = useState('period');
 
     useEffect(() => {
         let active = true;
@@ -43,84 +69,156 @@ const ImportPage = () => {
                 if (!active) return;
 
                 const list = result.data || [];
+                const years = result.years || [];
+
                 setPeriods(list);
+                setFiscalYears(years);
                 // ค่าเริ่มต้นเป็นงวดใหม่สุดที่มีข้อมูล
                 setExportPeriod(list[0] ? `${list[0].period_year}-${list[0].period_month}` : '');
+                setExportFiscalYear(years[0] ? String(years[0].fiscal_year) : '');
             })
             .catch(() => {
                 // ไม่มีงวดให้เลือก = ยัง export ไม่ได้ ปุ่มจะไม่แสดง
-                if (active) setPeriods([]);
+                if (!active) return;
+
+                setPeriods([]);
+                setFiscalYears([]);
             });
 
         return () => { active = false; };
     }, []);
 
-    // งวดของไฟล์ payroll — ใช้คำนวณเงินสำรองรายปี (เริ่มที่เดือนปัจจุ่น)
+    // ปีงบประมาณที่เลือกอยู่บน Header ใช้เป็นค่าเริ่มต้นของการนำเข้า
+    // ผู้ใช้เปลี่ยนเองในหน้านี้ได้ แล้วจะยึดค่าที่เลือกนั้นแทน
     const { fiscalYear } = useFiscalYear();
-    const [periodMonth, setPeriodMonth] = useState(currentMonth);
+    const [fiscalYearOverride, setFiscalYearOverride] = useState(null);
+    const importFiscalYear = fiscalYearOverride ?? fiscalYear;
+    const [scope, setScope] = useState('month');
+    const [months, setMonths] = useState([currentMonth()]);
 
-    const reset = () => {
-        setSummary(null);
-        setEmployeeResult(null);
-        setPreviewData([]);
-        setWarning('');
-        setUnlinkedSummary(null);
-    };
+    // ปีที่เสนอให้เลือกตอนนำเข้า — รอบปีงบที่เลือกอยู่ บวก/ลบ ปีละ 2
+    const importFiscalYearOptions = [1, 0, -1, -2]
+        .map((offset) => importFiscalYear + offset)
+        .filter((year) => year >= 2500 && year <= 2700)
+        .sort((a, b) => b - a);
 
-    const handleFileSelect = (file) => {
-        const validExtensions = ['xlsx', 'xls'];
-        const extension = file.name.split('.').pop().toLowerCase();
+    const reset = () => setBatchResults([]);
 
-        if (!validExtensions.includes(extension)) {
-            toast.error('รองรับเฉพาะไฟล์ .xlsx หรือ .xls');
-            return;
+    const handleFileSelect = (picked) => {
+        const incoming = Array.isArray(picked) ? picked : [picked];
+        const accepted = [];
+        const rejected = [];
+
+        incoming.forEach((file) => {
+            const extension = file.name.split('.').pop().toLowerCase();
+
+            if (!['xlsx', 'xls'].includes(extension)) {
+                rejected.push(`${file.name} (รองรับเฉพาะ .xlsx / .xls)`);
+            } else if (file.size > MAX_FILE_SIZE) {
+                rejected.push(`${file.name} (ใหญ่เกิน 10 MB)`);
+            } else {
+                accepted.push(file);
+            }
+        });
+
+        if (rejected.length > 0) {
+            toast.error(`ข้าม ${rejected.length} ไฟล์: ${rejected[0]}`);
         }
 
-        if (file.size > 10 * 1024 * 1024) {
-            toast.error('ขนาดไฟล์ต้องไม่เกิน 10 MB');
-            return;
+        if (accepted.length === 0) return;
+
+        // ต่อไฟล์ใหม่ต่อท้าย ไม่ใช่แทนที่ และกันไฟล์เดิมซ้ำด้วยชื่อ+ขนาด
+        const merged = [...selectedFiles];
+        accepted.forEach((file) => {
+            const exists = merged.some((item) => item.name === file.name && item.size === file.size);
+            if (!exists) merged.push(file);
+        });
+
+        const next = merged.slice(0, MAX_FILES);
+        if (merged.length > MAX_FILES) {
+            toast(`เลือกได้สูงสุด ${MAX_FILES} ไฟล์ต่อครั้ง — นำเข้าเฉพาะ ${MAX_FILES} ไฟล์แรก`, { icon: '⚠️' });
         }
 
-        setSelectedFile(file);
+        setSelectedFiles(next);
+
+        // เลือกหลายไฟล์ = ตั้งใจครอบคลุมหลายงวดอยู่แล้ว เลื่อนไปโหมดหลายงวดให้เลย
+        // (โหมดงวดเดียวจะเติมงวดเดียวกันให้ทุกไฟล์ ซึ่งพลาดง่ายกว่า)
+        if (next.length > 1) setScope('months');
+
         reset();
     };
 
     const handleClear = () => {
-        setSelectedFile(null);
+        setSelectedFiles([]);
         reset();
     };
 
     const handleImport = async () => {
-        if (!selectedFile) return;
+        if (selectedFiles.length === 0) return;
+
+        if (scope === 'months' && months.length === 0) {
+            toast.error('เลือกงวดที่ไฟล์ครอบคลุมอย่างน้อย 1 งวด');
+            return;
+        }
 
         setLoading(true);
-        try {
-            const result = await importService.uploadFile(selectedFile, {
-                fiscal_year: fiscalYear,
-                period_month: Number(periodMonth),
-            });
+        const results = [];
 
-            setSummary(result.import);
-            setEmployeeResult(result.employee || null);
-            setPreviewData(result.preview || []);
-            setWarning(result.warning || '');
-            setUnlinkedSummary(result.unlinked_summary || null);
+        // ทีละไฟล์ — แต่ละไฟล์คือคนละงวด การรันพร้อมกันจะชนกันตอนเขียนลงฐาน
+        for (const file of selectedFiles) {
+            try {
+                const data = await importService.uploadFile(file, {
+                    scope,
+                    fiscal_year: importFiscalYear,
+                    // งวดเดียว = ใช้เป็นงวดสำรองของแถวที่ไม่ระบุเดือน
+                    // ทั้งปีงบประมาณ = ไม่ส่งเดือนเลย ให้ระบบตรวจว่าอยู่ใน ต.ค.–ก.ย.
+                    period_month: scope === 'month' ? months[0] : undefined,
+                    period_months: scope === 'months' ? months : undefined,
+                });
 
-            if (result.warning) {
-                toast(result.warning, { icon: '⚠️' });
-            } else {
-                toast.success('นำเข้าข้อมูลสำเร็จ!');
+                results.push({ name: file.name, ok: true, data });
+            } catch (error) {
+                results.push({ name: file.name, ok: false, message: errorMessage(error) });
             }
-        } catch (error) {
-            const message = error.response?.data?.message || 'เกิดข้อผิดพลาด';
-            toast.error(message);
-        } finally {
-            setLoading(false);
+        }
+
+        setBatchResults(results);
+        setLoading(false);
+
+        const failed = results.filter((result) => !result.ok).length;
+        const succeeded = results.length - failed;
+
+        if (failed === 0) {
+            toast.success(`นำเข้าสำเร็จ ${succeeded} ไฟล์`);
+        } else if (succeeded === 0) {
+            toast.error(`นำเข้าไม่สำเร็จทั้งหมด ${failed} ไฟล์`);
+        } else {
+            toast(`นำเข้าสำเร็จ ${succeeded} จาก ${results.length} ไฟล์ — เหลือที่ต้องแก้ ${failed} ไฟล์`, { icon: '⚠️' });
         }
     };
 
+    // ไฟล์เดียวใช้การ์ดสรุปเดิม (มีตัวเลขครบ) หลายไฟล์ใช้ผลรายไฟล์แทน
+    const singleResult = batchResults.length === 1 ? batchResults[0] : null;
+    const summary = singleResult?.ok ? singleResult.data.import : null;
+    const employeeResult = singleResult?.ok ? singleResult.data.employee : null;
+    const unlinkedSummary = singleResult?.ok ? singleResult.data.unlinked_summary : null;
+    const warning = singleResult?.ok ? singleResult.data.warning : '';
+    // ตัวอย่างข้อมูลของไฟล์ล่าสุดที่นำเข้าสำเร็จ
+    const previewData = [...batchResults].reverse().find((result) => result.ok)?.data?.preview || [];
+
     // มีงวดให้เลือกไหม — ถ้าไม่มี export ไม่ได้ การ์ดจะแสดงสถานะแทนปุ่มที่กดได้
-    const hasPeriods = periods.length > 0 && Boolean(exportPeriod);
+    const selectedPeriod = periods.find(
+        (p) => `${p.period_year}-${p.period_month}` === exportPeriod,
+    );
+    const hasPeriods = periods.length > 0 && Boolean(selectedPeriod);
+    // ปีงบประมาณมาจากข้อมูลงวดเดียวกัน ถ้าไม่มีรายการปีงบให้เลือกก็ยังรายงวดอย่างเดียว
+    const canExportByYear = fiscalYears.length > 0 && Boolean(exportFiscalYear);
+    const exportScopeValue = exportScope === 'year' && canExportByYear ? 'year' : 'period';
+
+    // ยังไม่มีงวดตอนเปิดหน้า ปุ่มจะยังไม่ถูกวาด จึงยังไม่ต้องมี endpoint
+    const exportEndpoint = exportScopeValue === 'year'
+        ? importService.exportFiscalYearUrl(Number(exportFiscalYear))
+        : (selectedPeriod ? importService.exportUrl(selectedPeriod) : null);
 
     return (
         <div className="max-w-7xl mx-auto">
@@ -128,7 +226,7 @@ const ImportPage = () => {
                 <h2 className="text-2xl font-bold text-[#8B5E3C] mb-1">
                     นำเข้าข้อมูล
                 </h2>
-                <div className="mt-4 grid items-start gap-3 md:grid-cols-2">
+                <div className="mt-4 grid gap-3 md:grid-cols-2">
                     {/* การ์ดดาวน์โหลดแบบฟอร์ม — ใช้เมื่อยังไม่มีไฟล์ ต้องเริ่มจากศูนย์ */}
                     <section className="flex flex-col rounded-2xl border border-[#E6D3A3] bg-white p-4">
                         <div className="flex items-start gap-2.5">
@@ -144,13 +242,24 @@ const ImportPage = () => {
                             </div>
                         </div>
 
-                        {/* mt-auto ดันปุ่มลงขอบล่าง ให้ปุ่มของทั้งสองการ์ดอยู่ระดับเดียวกัน */}
-                        <div className="mt-auto pt-4">
+                        {/* mt-auto ดันปุ่มลงขอบล่าง ให้การ์ดทั้งสองสูงเท่ากันและปุ่มอยู่ระดับเดียวกัน */}
+                        <div className="mt-auto flex flex-col gap-2 pt-4">
                             <TemplateDownloadButton
                                 endpoint="/imports/template"
                                 label="ดาวน์โหลดแบบฟอร์มกรอกข้อมูล"
                                 className="[&>button]:w-full [&>button]:justify-center"
                             />
+
+                            {canManageColumns && (
+                                <button
+                                    type="button"
+                                    onClick={() => setShowColumns((v) => !v)}
+                                    className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-[#8B5E3C] px-3 py-2 text-sm font-medium text-[#8B5E3C] transition-colors hover:bg-[#F5EEDC]"
+                                >
+                                    <SlidersHorizontal size={15} />
+                                    {showColumns ? 'ซ่อนคอลัมน์เพิ่มเติม' : 'จัดการคอลัมน์เพิ่มเติม'}
+                                </button>
+                            )}
                         </div>
                     </section>
 
@@ -172,34 +281,61 @@ const ImportPage = () => {
 
                         {hasPeriods ? (
                             <div className="mt-auto flex flex-col gap-2 pt-4">
+                                {/* ขอบเขต: งวดเดียว หรือทั้งปีงบประมาณ */}
+                                <div className="grid grid-cols-2 gap-1 rounded-xl bg-[#F5EEDC]/60 p-1">
+                                    {EXPORT_SCOPES
+                                        .filter((option) => option.value !== 'year' || canExportByYear)
+                                        .map((option) => (
+                                            <button
+                                                key={option.value}
+                                                type="button"
+                                                aria-pressed={exportScopeValue === option.value}
+                                                onClick={() => setExportScope(option.value)}
+                                                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                                                    exportScopeValue === option.value
+                                                        ? 'bg-white text-[#8B5E3C] shadow-sm'
+                                                        : 'text-gray-500 hover:text-gray-700'
+                                                }`}
+                                            >
+                                                {option.label}
+                                            </button>
+                                        ))}
+                                </div>
+
                                 <div>
                                     <label
                                         htmlFor="export-period"
                                         className="mb-1 block text-xs font-medium text-gray-600"
                                     >
-                                        งวดที่จะ export
+                                        {exportScopeValue === 'year' ? 'ปีงบประมาณที่จะ export' : 'งวดที่จะ export'}
                                     </label>
                                     <select
                                         id="export-period"
-                                        value={exportPeriod}
-                                        onChange={(e) => setExportPeriod(e.target.value)}
+                                        value={exportScopeValue === 'year' ? exportFiscalYear : exportPeriod}
+                                        onChange={(e) => (exportScopeValue === 'year'
+                                            ? setExportFiscalYear(e.target.value)
+                                            : setExportPeriod(e.target.value))}
                                         className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 focus:border-[#C5A059] focus:outline-none focus:ring-1 focus:ring-[#C5A059]"
                                     >
-                                        {periods.map((period) => (
-                                            <option
-                                                key={`${period.period_year}-${period.period_month}`}
-                                                value={`${period.period_year}-${period.period_month}`}
-                                            >
-                                                {period.label} ({period.rows} คน)
-                                            </option>
-                                        ))}
+                                        {exportScopeValue === 'year'
+                                            ? fiscalYears.map((year) => (
+                                                <option key={year.fiscal_year} value={String(year.fiscal_year)}>
+                                                    {year.label}
+                                                </option>
+                                            ))
+                                            : periods.map((period) => (
+                                                <option
+                                                    key={`${period.period_year}-${period.period_month}`}
+                                                    value={`${period.period_year}-${period.period_month}`}
+                                                >
+                                                    {period.label} ({period.rows} คน)
+                                                </option>
+                                            ))}
                                     </select>
                                 </div>
 
                                 <TemplateDownloadButton
-                                    endpoint={importService.exportUrl(periods.find(
-                                        (p) => `${p.period_year}-${p.period_month}` === exportPeriod,
-                                    ) || periods[0])}
+                                    endpoint={exportEndpoint}
                                     label="Export ข้อมูล"
                                     className="[&>button]:w-full [&>button]:justify-center"
                                 />
@@ -217,17 +353,6 @@ const ImportPage = () => {
                         )}
                     </section>
                 </div>
-
-                {canManageColumns && (
-                    <button
-                        type="button"
-                        onClick={() => setShowColumns((v) => !v)}
-                        className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-[#8B5E3C] px-3 py-2 text-sm font-medium text-[#8B5E3C] transition-colors hover:bg-[#F5EEDC]"
-                    >
-                        <SlidersHorizontal size={15} />
-                        {showColumns ? 'ซ่อนคอลัมน์เพิ่มเติม' : 'จัดการคอลัมน์เพิ่มเติม'}
-                    </button>
-                )}
             </div>
 
             {canManageColumns && showColumns && (
@@ -241,8 +366,9 @@ const ImportPage = () => {
                 <div className="lg:col-span-2 space-y-6">
                     <FileDropZone
                         onFileSelect={handleFileSelect}
-                        selectedFile={selectedFile}
+                        selectedFiles={selectedFiles}
                         onClear={handleClear}
+                        multiple
                     />
 
                     {previewData.length > 0 && (
@@ -250,45 +376,39 @@ const ImportPage = () => {
                     )}
                 </div>
 
-                {/* Right: Summary + Selected File */}
+                {/* Right: ขอบเขตงวด + ไฟล์ที่เลือก + ผลลัพธ์ */}
                 <div className="space-y-6">
-                    {selectedFile && !summary && (
-                        <div className="bg-white rounded-2xl border border-[#E6D3A3] p-6">
-                            <h3 className="text-lg font-semibold text-gray-700 mb-4">
-                                งวดของไฟล์ (Payroll)
-                            </h3>
-                            <label
-                                htmlFor="import-period-month"
-                                className="block text-sm font-medium text-gray-700 mb-2"
-                            >
-                                งวดเดือน
-                            </label>
-                            <select
-                                id="import-period-month"
-                                value={periodMonth}
-                                onChange={(e) => setPeriodMonth(e.target.value)}
-                                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 focus:border-[#C5A059] focus:outline-none focus:ring-1 focus:ring-[#C5A059]"
-                            >
-                                {FISCAL_MONTHS.map((month) => (
-                                    <option key={month} value={month}>
-                                        {MONTH_LABELS[month]} {calendarYearOf(fiscalYear, month)}
-                                    </option>
-                                ))}
-                            </select>
-                            <p className="mt-2 text-xs text-gray-500">
-                                ไฟล์ที่มีคอลัมน์ปี/เดือนจะใช้งวดของแต่ละแถวจริง
-                                ค่านี้เป็นเพียงงวดสำรอง
-                            </p>
-                        </div>
+                    {selectedFiles.length > 0 && batchResults.length === 0 && (
+                        <PeriodScopePicker
+                            scope={scope}
+                            onScopeChange={setScope}
+                            months={months}
+                            onMonthsChange={setMonths}
+                            fiscalYear={importFiscalYear}
+                            onFiscalYearChange={setFiscalYearOverride}
+                            fiscalYearOptions={importFiscalYearOptions}
+                        />
                     )}
 
-                    {selectedFile && !summary && (
+                    {selectedFiles.length > 0 && batchResults.length === 0 && (
                         <SelectedFilePanel
-                            file={selectedFile}
+                            files={selectedFiles}
                             onImport={handleImport}
                             onCancel={handleClear}
                             loading={loading}
                         />
+                    )}
+
+                    {/* เริ่มนำเข้าไฟล์ใหม่ — ค่าขอบเขตงวดจะถูกนับใหม่ */}
+                    {batchResults.length > 0 && (
+                        <button
+                            type="button"
+                            onClick={handleClear}
+                            className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-[#8B5E3C] px-3 py-2 text-sm font-medium text-[#8B5E3C] transition-colors hover:bg-[#F5EEDC]"
+                        >
+                            <RotateCcw size={15} />
+                            เลือกไฟล์ใหม่
+                        </button>
                     )}
 
                     {warning && (
@@ -313,7 +433,7 @@ const ImportPage = () => {
                     {unlinkedSummary && unlinkedSummary.rows > 0 && (
                         <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4">
                             <div className="flex items-center gap-2 text-sm font-medium text-amber-900">
-                                <AlertTriangle className="h-4 w-4 shrink-0" />
+                                <Unlink className="h-4 w-4 shrink-0" />
                                 <span>
                                     เงิน {unlinkedSummary.total_income.toLocaleString('th-TH', { minimumFractionDigits: 2 })} บาท
                                     ของ {unlinkedSummary.rows.toLocaleString()} คน-งวด
@@ -349,6 +469,10 @@ const ImportPage = () => {
 
                     {summary && (
                         <ImportSummary summary={summary} />
+                    )}
+
+                    {batchResults.length > 1 && (
+                        <BatchImportSummary results={batchResults} />
                     )}
                 </div>
             </div>

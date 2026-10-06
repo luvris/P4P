@@ -8,14 +8,22 @@ const UPLOAD_TIMEOUT = 180000;
 export const importService = {  // ไฟล์เดียวได้ทั้งทะเบียนบุคลากรและแถวเงินเดือน
   /**
    * อัปโหลดไฟล์
+   *
    * @param {File} file
-   * @param {{fiscal_year?: number, period_month?: number}} [period] งวดสำรอง (ไฟล์ที่มีคอลัมน์ปี/เดือนจะใช้ของแต่ละแถวแทน)
+   * @param {{scope?: 'month'|'months'|'year', fiscal_year?: number,
+   *          period_month?: number, period_months?: number[]}} [period]
+   *   month  = งวดเดียว (period_month ใช้เป็นงวดสำรองของแถวที่ไม่ระบุเดือน)
+   *   months = หลายงวด (period_months ใช้ตรวจว่าไฟล์ตรงกับงวดที่เลือก)
+   *   year   = ทั้งปีงบประมาณ (ส่งเฉพาะ fiscal_year)
+   *   ไฟล์ที่มีคอลัมน์ปี/เดือนของตัวเอง ระบบจะใช้งวดของแต่ละแถวเสมอ
    */
   uploadFile: async (file, period = {}) => {
     const formData = new FormData();
     formData.append('file', file);
+    if (period?.scope) formData.append('scope', period.scope);
     if (period?.period_month) formData.append('period_month', period.period_month);
     if (period?.fiscal_year) formData.append('fiscal_year', period.fiscal_year);
+    (period?.period_months || []).forEach((month) => formData.append('period_months[]', month));
 
     const response = await api.post('/imports', formData, {
       headers: {
@@ -28,7 +36,7 @@ export const importService = {  // ไฟล์เดียวได้ทั้
   },
 
   /**
-   * งวดที่มีข้อมูลในระบบ ใช้เป็นตัวเลือกงวดของปุ่ม export (งวดใหม่สุดมาก่อน)
+   * งวดและปีงบประมาณที่มีข้อมูลในระบบ ใช้เป็นตัวเลือกของปุ่ม export (งวดใหม่สุดมาก่อน)
    */
   getPeriods: async () => {
     const response = await api.get('/imports/periods');
@@ -42,6 +50,14 @@ export const importService = {  // ไฟล์เดียวได้ทั้
    */
   exportUrl: (period) =>
     `/imports/export?period_year=${period.period_year}&period_month=${period.period_month}`,
+
+  /**
+   * ที่อยู่ไฟล์ export ทั้งปีงบประมาณ (ต.ค. – ก.ย.)
+   *
+   * @param {number} fiscalYear
+   */
+  exportFiscalYearUrl: (fiscalYear) =>
+    `/imports/export?fiscal_year=${fiscalYear}`,
 
   /**
    * ดูประวัติการ import
