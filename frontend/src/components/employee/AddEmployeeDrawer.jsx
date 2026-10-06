@@ -31,7 +31,12 @@ const buildFormFromEmployee = (emp) => ({
     last_name: emp?.last_name ?? '',
     citizen_id: emp?.citizen_id ?? '',
     position_number: emp?.position_number ?? '',
-    salary: emp?.salary != null && emp?.salary !== '' ? String(emp.salary) : '',
+    // salary (ฐานที่ปรับแล้ว) มาก่อน — ว่างค่อยดึงจากไฟล์เงินเดือนล่าสุด
+    salary: emp?.salary != null && emp?.salary !== ''
+        ? String(emp.salary)
+        : emp?.latest_salary != null && emp?.latest_salary !== ''
+            ? String(emp.latest_salary)
+            : '',
     employee_type_id: emp?.employee_type_id != null ? String(emp.employee_type_id) : '',
     position_id: emp?.position_id != null ? String(emp.position_id) : '',
     duty_id: emp?.duty_id != null ? String(emp.duty_id) : '',
@@ -67,6 +72,14 @@ Field.displayName = 'Field';
 const AddEmployeeDrawer = ({ open, onClose, lookups = {}, onSubmit, employee = null, readOnly = false }) => {
     const isEditing = Boolean(employee);
 
+    // ที่มาของค่าในช่องเงินเดือน — ค่าจากฐานที่ปรับแล้วมาก่อน ไม่มีค่อยใช้ค่าจากไฟล์
+    const hasOwnSalary = employee?.salary != null && employee?.salary !== '';
+    const salaryFromLatest = !hasOwnSalary && employee?.latest_salary != null && employee?.latest_salary !== '';
+    const latestDiffers =
+        hasOwnSalary &&
+        employee?.latest_salary != null &&
+        employee?.latest_salary !== '' &&
+        Number(employee.salary) !== Number(employee.latest_salary);
     const latestPeriod = employee?.latest_period_year
         ? ` งวด ${employee.latest_period_month ?? '-'}/${employee.latest_period_year}`
         : '';
@@ -299,8 +312,13 @@ const AddEmployeeDrawer = ({ open, onClose, lookups = {}, onSubmit, employee = n
                             step="0.01"
                             className={inputCls('salary')}
                         />
-                        {/* เงินเดือนล่าสุดจากไฟล์เงินเดือน — โชว์อย่างเดียว ไม่กระทบค่าที่บันทึก */}
-                        {employee?.latest_salary != null && employee.latest_salary !== '' && (
+                        {/* ที่มาของค่าในช่อง — ไม่มีฐานเงินเดือนก็เติมจากไฟล์เงินเดือนล่าสุด */}
+                        {salaryFromLatest && (
+                            <p className="mt-1 text-xs text-amber-700">
+                                เติมจากไฟล์เงินเดือน{latestPeriod}
+                            </p>
+                        )}
+                        {latestDiffers && (
                             <p className="mt-1 text-xs text-amber-700">
                                 ล่าสุดจากไฟล์เงินเดือน: {formatCurrency(employee.latest_salary)} บาท{latestPeriod}
                             </p>
