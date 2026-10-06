@@ -7,7 +7,7 @@ import PreviewTable from '../components/features/import/PreviewTable';
 import TemplateDownloadButton from '../components/features/import/TemplateDownloadButton';
 import ExtraColumnsPanel from '../components/features/import/ExtraColumnsPanel';
 import { importService } from '../services/importService';
-import { AlertTriangle, Users, SlidersHorizontal } from 'lucide-react';
+import { AlertTriangle, Users, SlidersHorizontal, FileSpreadsheet, FileDown } from 'lucide-react';
 import useAuth from '../hooks/useAuth';
 import useFiscalYear from '../hooks/useFiscalYear';
 import { FISCAL_MONTHS, MONTH_LABELS, calendarYearOf, currentMonth } from '../utils/fiscalPeriod';
@@ -119,66 +119,115 @@ const ImportPage = () => {
         }
     };
 
+    // มีงวดให้เลือกไหม — ถ้าไม่มี export ไม่ได้ การ์ดจะแสดงสถานะแทนปุ่มที่กดได้
+    const hasPeriods = periods.length > 0 && Boolean(exportPeriod);
+
     return (
         <div className="max-w-7xl mx-auto">
             <div className="mb-6">
                 <h2 className="text-2xl font-bold text-[#8B5E3C] mb-1">
                     นำเข้าข้อมูล
                 </h2>
-                <div className="mt-3 flex flex-wrap items-start gap-2">
-                    <TemplateDownloadButton
-                        endpoint="/imports/template"
-                        label="ดาวน์โหลดแบบฟอร์มกรอกข้อมูล"
-                        hint="ไฟล์ต้นแบบ 39 คอลัมน์ — กรอกแล้วอัปโหลดกลับเข้ามาได้เลย"
-                    />
-
-                    {periods.length > 0 && exportPeriod && (
-                        <div className="flex flex-wrap items-end gap-2">
-                            <div>
-                                <label
-                                    htmlFor="export-period"
-                                    className="mb-1 block text-xs font-medium text-gray-600"
-                                >
-                                    งวดที่จะ export
-                                </label>
-                                <select
-                                    id="export-period"
-                                    value={exportPeriod}
-                                    onChange={(e) => setExportPeriod(e.target.value)}
-                                    className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 focus:border-[#C5A059] focus:outline-none focus:ring-1 focus:ring-[#C5A059]"
-                                >
-                                    {periods.map((period) => (
-                                        <option
-                                            key={`${period.period_year}-${period.period_month}`}
-                                            value={`${period.period_year}-${period.period_month}`}
-                                        >
-                                            {period.label} ({period.rows} คน)
-                                        </option>
-                                    ))}
-                                </select>
+                <div className="mt-4 grid items-start gap-3 md:grid-cols-2">
+                    {/* การ์ดดาวน์โหลดแบบฟอร์ม — ใช้เมื่อยังไม่มีไฟล์ ต้องเริ่มจากศูนย์ */}
+                    <section className="flex flex-col rounded-2xl border border-[#E6D3A3] bg-white p-4">
+                        <div className="flex items-start gap-2.5">
+                            <FileSpreadsheet className="mt-0.5 h-5 w-5 shrink-0 text-[#C5A059]" />
+                            <div className="min-w-0">
+                                <h3 className="text-sm font-semibold text-gray-800">
+                                    แบบฟอร์มกรอกข้อมูล
+                                </h3>
+                                <p className="mt-0.5 text-xs leading-relaxed text-gray-500">
+                                    ไฟล์เปล่า 39 คอลัมน์ — ดาวน์โหลดไปกรอก
+                                    แล้วอัปโหลดกลับเข้ามาได้เลย
+                                </p>
                             </div>
+                        </div>
 
+                        {/* mt-auto ดันปุ่มลงขอบล่าง ให้ปุ่มของทั้งสองการ์ดอยู่ระดับเดียวกัน */}
+                        <div className="mt-auto pt-4">
                             <TemplateDownloadButton
-                                endpoint={importService.exportUrl(periods.find(
-                                    (p) => `${p.period_year}-${p.period_month}` === exportPeriod,
-                                ) || periods[0])}
-                                label="Export ข้อมูล"
-                                hint="หัวตารางเดียวกับแบบฟอร์ม แต่มีข้อมูลของงวดที่เลือกอยู่แล้ว — แก้แล้วอัปโหลดกลับได้"
+                                endpoint="/imports/template"
+                                label="ดาวน์โหลดแบบฟอร์มกรอกข้อมูล"
+                                className="[&>button]:w-full [&>button]:justify-center"
                             />
                         </div>
-                    )}
+                    </section>
 
-                    {canManageColumns && (
-                        <button
-                            type="button"
-                            onClick={() => setShowColumns((v) => !v)}
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-[#8B5E3C] px-3 py-2 text-sm font-medium text-[#8B5E3C] transition-colors hover:bg-[#F5EEDC]"
-                        >
-                            <SlidersHorizontal size={15} />
-                            {showColumns ? 'ซ่อนคอลัมน์เพิ่มเติม' : 'จัดการคอลัมน์เพิ่มเติม'}
-                        </button>
-                    )}
+                    {/* การ์ด export — ดึงข้อมูลที่มีอยู่แล้วกลับออกมาเป็นไฟล์เดียวกับแบบฟอร์ม */}
+                    <section className="flex flex-col rounded-2xl border border-[#E6D3A3] bg-white p-4">
+                        <div className="flex items-start gap-2.5">
+                            <FileDown className="mt-0.5 h-5 w-5 shrink-0 text-[#C5A059]" />
+                            <div className="min-w-0">
+                                <h3 className="text-sm font-semibold text-gray-800">
+                                    Export ข้อมูล
+                                </h3>
+                                <p className="mt-0.5 text-xs leading-relaxed text-gray-500">
+                                    {hasPeriods
+                                        ? 'หัวตารางเดียวกับแบบฟอร์ม แต่มีข้อมูลของงวดที่เลือกอยู่แล้ว — แก้แล้วอัปโหลดกลับได้'
+                                        : 'ยังไม่มีงวดที่มีข้อมูล — อัปโหลดไฟล์เงินเดือนงวดแรกก่อนจึงจะ export ได้'}
+                                </p>
+                            </div>
+                        </div>
+
+                        {hasPeriods ? (
+                            <div className="mt-auto flex flex-col gap-2 pt-4">
+                                <div>
+                                    <label
+                                        htmlFor="export-period"
+                                        className="mb-1 block text-xs font-medium text-gray-600"
+                                    >
+                                        งวดที่จะ export
+                                    </label>
+                                    <select
+                                        id="export-period"
+                                        value={exportPeriod}
+                                        onChange={(e) => setExportPeriod(e.target.value)}
+                                        className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 focus:border-[#C5A059] focus:outline-none focus:ring-1 focus:ring-[#C5A059]"
+                                    >
+                                        {periods.map((period) => (
+                                            <option
+                                                key={`${period.period_year}-${period.period_month}`}
+                                                value={`${period.period_year}-${period.period_month}`}
+                                            >
+                                                {period.label} ({period.rows} คน)
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <TemplateDownloadButton
+                                    endpoint={importService.exportUrl(periods.find(
+                                        (p) => `${p.period_year}-${p.period_month}` === exportPeriod,
+                                    ) || periods[0])}
+                                    label="Export ข้อมูล"
+                                    className="[&>button]:w-full [&>button]:justify-center"
+                                />
+                            </div>
+                        ) : (
+                            <div className="mt-auto pt-4">
+                                <button
+                                    type="button"
+                                    disabled
+                                    className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-400"
+                                >
+                                    ยังไม่มีข้อมูลให้ export
+                                </button>
+                            </div>
+                        )}
+                    </section>
                 </div>
+
+                {canManageColumns && (
+                    <button
+                        type="button"
+                        onClick={() => setShowColumns((v) => !v)}
+                        className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-[#8B5E3C] px-3 py-2 text-sm font-medium text-[#8B5E3C] transition-colors hover:bg-[#F5EEDC]"
+                    >
+                        <SlidersHorizontal size={15} />
+                        {showColumns ? 'ซ่อนคอลัมน์เพิ่มเติม' : 'จัดการคอลัมน์เพิ่มเติม'}
+                    </button>
+                )}
             </div>
 
             {canManageColumns && showColumns && (
