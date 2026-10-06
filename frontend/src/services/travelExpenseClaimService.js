@@ -44,6 +44,18 @@ export const travelExpenseClaimService = {
         return response.data;
     },
 
+    /**
+     * สรุปผลการเบิกค่าใช้จ่าย — ยอดแยกตาม ภารกิจ → กลุ่มงาน → งาน
+     *
+     * params: fiscal_year, level (duty|group|work), duty_id, group_id, work_id,
+     *         period_from, period_to (Y-m-d), include_draft
+     * ทุกยอดคำนวณจากข้อมูลชุดเดียวกันตามตัวกรองทั้งชุด
+     */
+    getSummary: async (params = {}) => {
+        const response = await api.get(`${BASE}/summary`, { params });
+        return response.data;
+    },
+
     /** สร้างเอกสาร — status: draft หรือ confirmed */
     create: async (payload) => {
         const response = await api.post(BASE, payload);
