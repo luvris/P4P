@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\EmployeeStatus;
 use App\Models\Import;
 use App\Models\ReserveFundCalculation;
 use Illuminate\Http\JsonResponse;
@@ -17,7 +18,7 @@ class ReserveFundController extends Controller
      * คนลาออก/ลาศึกษาต่อ/ลาเลี้ยงลูก ไม่ถูกนับ และแถวที่ผูกกับทะเบียนบุคลากรไม่ได้
      * (เลขบัตรประชาชนไม่ตรง) ก็ไม่ถูกนับเช่นกัน
      */
-    protected const ACTIVE_EMPLOYEE_STATUSES = ['ปฏิบัติงานอยู่'];
+    protected const ACTIVE_EMPLOYEE_STATUSES = [EmployeeStatus::ACTIVE_NAME];
 
     /**
      * นิพจน์ฐานคำนวณ = ยอดรวมรายรับทั้งหมดรายบุคคล

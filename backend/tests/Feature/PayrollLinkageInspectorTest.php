@@ -32,10 +32,10 @@ class PayrollLinkageInspectorTest extends TestCase
         $missPrefix = Prefix::create(['name' => 'นางสาว', 'short_name' => 'น.ส.']);
 
         Employee::create([
-            'citizen_id' => '1509901045049',
+            'citizen_id' => '1111111111111',
             'prefix_id'  => $missPrefix->id,
-            'first_name' => 'ปาริฉัตร',
-            'last_name'  => 'สิทธิวงค์',
+            'first_name' => 'ทดสอบ',
+            'last_name'  => 'ทดสอบ',
             'status_id'  => $working->id,
         ]);
 
@@ -56,7 +56,7 @@ class PayrollLinkageInspectorTest extends TestCase
     public function test_a_row_that_links_correctly_produces_no_warning(): void
     {
         $warnings = $this->inspector->inspect([
-            $this->row('1509901045049', 'นางสาวปาริฉัตร', 'สิทธิวงค์'),
+            $this->row('1111111111111', 'นางสาวทดสอบ', 'ทดสอบ'),
         ]);
 
         $this->assertSame([], $warnings);
@@ -66,16 +66,16 @@ class PayrollLinkageInspectorTest extends TestCase
     {
         // เลขบัตรผิด 1 หลัก แต่ชื่อตรงกับคนที่ปฏิบัติงานอยู่
         $warnings = $this->inspector->inspect([
-            $this->row('1509901075049', 'นางสาวปาริฉัตร', 'สิทธิวงค์'),
+            $this->row('1111111111111', 'นางสาวทดสอบ', 'ทดสอบ'),
         ]);
 
         $this->assertCount(1, $warnings);
         $this->assertSame('link', $warnings[0]['type']);
         $this->assertSame('name_match', $warnings[0]['reason']);
         $this->assertSame(2, $warnings[0]['row']);
-        $this->assertSame('1509901045049', $warnings[0]['employee_citizen_id']);
-        $this->assertSame('1509901075049', $warnings[0]['file_citizen_id']);
-        $this->assertStringContainsString('ปาริฉัตร สิทธิวงค์', $warnings[0]['error']);
+        $this->assertSame('1111111111111', $warnings[0]['employee_citizen_id']);
+        $this->assertSame('1111111111111', $warnings[0]['file_citizen_id']);
+        $this->assertStringContainsString('ทดสอบ ทดสอบ', $warnings[0]['error']);
         $this->assertStringContainsString('ปฏิบัติงานอยู่', $warnings[0]['error']);
     }
 
@@ -83,7 +83,7 @@ class PayrollLinkageInspectorTest extends TestCase
     {
         // ชื่อตรงกับคนที่ลาออกไปแล้ว (เลขบัตรผิด) — ไม่ต้องเตือน เพราะเขาออกจากงานแล้ว
         $warnings = $this->inspector->inspect([
-            $this->row('1111111111112', 'นายสมชาย', 'ใจดี'),
+            $this->row('1111111111111', 'นายสมชาย', 'ใจดี'),
         ]);
 
         $this->assertSame([], $warnings);
@@ -92,7 +92,7 @@ class PayrollLinkageInspectorTest extends TestCase
     public function test_a_typo_that_matches_nobody_by_name_is_still_flagged_by_near_citizen_id(): void
     {
         $warnings = $this->inspector->inspect([
-            $this->row('1111111111113', 'ไม่ทราบชื่อ', 'ไม่ทราบสกุล'),
+            $this->row('1111111111111', 'ไม่ทราบชื่อ', 'ไม่ทราบสกุล'),
         ]);
 
         $this->assertCount(1, $warnings);
@@ -103,7 +103,7 @@ class PayrollLinkageInspectorTest extends TestCase
     public function test_a_completely_unknown_citizen_id_is_not_flagged(): void
     {
         $warnings = $this->inspector->inspect([
-            $this->row('9999999999999', 'ไม่ทราบชื่อ', 'ไม่ทราบสกุล'),
+            $this->row('1111111111111', 'ไม่ทราบชื่อ', 'ไม่ทราบสกุล'),
         ]);
 
         $this->assertSame([], $warnings);
@@ -111,7 +111,7 @@ class PayrollLinkageInspectorTest extends TestCase
 
     public function test_duplicate_rows_produce_only_one_warning(): void
     {
-        $row = $this->row('1509901075049', 'นางสาวปาริฉัตร', 'สิทธิวงค์');
+        $row = $this->row('1111111111111', 'นางสาวทดสอบ', 'ทดสอบ');
 
         $warnings = $this->inspector->inspect([$row, $row]);
 

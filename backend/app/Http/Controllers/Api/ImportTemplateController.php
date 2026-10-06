@@ -8,6 +8,7 @@ use App\Services\Parsers\NewFormatPayrollParser;
 use App\Services\PayrollExportService;
 use App\Services\PayrollExtraColumnService;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx as XlsxWriter;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -39,17 +40,51 @@ class ImportTemplateController extends Controller
 
     /**
      * GET /api/imports/export?period_month=1&period_year=2569
-     * ไฟล์ข้อมูลจริง หัวตารางเดียวกับแบบฟอร์ม แต่แถวแรกเป็นข้อมูลของงวดที่เลือก
+     * GET /api/imports/export?fiscal_year=2569
+     * ไฟล์ข้อมูลจริง หัวตารางเดียวกับแบบฟอร์ม แต่แถวแรกเป็นข้อมูลจริงทันที
+     *
+     * เลือกได้อย่างใดอย่างหนึ่ง: งวดเดียว หรือทั้งปีงบประมาณ (ต.ค. – ก.ย.)
      */
     public function export(Request $request): StreamedResponse
     {
         $validated = $request->validate([
-            'period_month' => ['required', 'integer', 'between:1,12'],
-            'period_year'  => ['required', 'integer', 'between:2500,3000'],
+            'period_month' => ['nullable', 'integer', 'between:1,12'],
+            'period_year'  => ['nullable', 'integer', 'between:2500,3000'],
+            'fiscal_year'  => ['nullable', 'integer', 'between:2500,3000'],
         ]);
 
-        $month = (int) $validated['period_month'];
-        $year = (int) $validated['period_year'];
+        $month = isset($validated['period_month']) ? (int) $validated['period_month'] : null;
+        $year = isset($validated['period_year']) ? (int) $validated['period_year'] : null;
+        $fiscalYear = isset($validated['fiscal_year']) ? (int) $validated['fiscal_year'] : null;
+
+        // ไม่ระบุอะไรเลย = ยังไม่ได้เลือกว่าจะเอางวดไหนหรือปีไหน
+        if ($month === null && $fiscalYear === null) {
+            throw ValidationException::withMessages([
+                'period_month' => ['ระบุงวดที่จะ export หรือปีงบประมาณที่จะ export'],
+                'period_year'  => ['ระบุงวดที่จะ export หรือปีงบประมาณที่จะ export'],
+            ]);
+        }
+
+        // ระบุมาทั้งสองแบบ = กำกวม ผู้ใช้อาจจะได้ไฟล์ที่ไม่ตรงใจ
+        if ($month !== null && $fiscalYear !== null) {
+            throw ValidationException::withMessages([
+                'fiscal_year' => ['เลือกได้อย่างใดอย่างหนึ่งระหว่างรายงวดกับทั้งปีงบประมาณ'],
+            ]);
+        }
+
+        if ($fiscalYear !== null) {
+            return $this->stream(
+                $this->exports->exportFiscalYear($fiscalYear)['spreadsheet'],
+                $this->exports->fiscalYearFileName($fiscalYear)
+            );
+        }
+
+        // เลือกงวดแล้วต้องมีปีมาด้วย ไม่งั้นไม่รู้ว่าจะเอางวดของปีไหน
+        if ($year === null) {
+            throw ValidationException::withMessages([
+                'period_year' => ['ระบุปีของงวดที่จะ export'],
+            ]);
+        }
 
         return $this->stream(
             $this->exports->export($month, $year)['spreadsheet'],
@@ -59,11 +94,14 @@ class ImportTemplateController extends Controller
 
     /**
      * GET /api/imports/periods
-     * งวดที่มีข้อมูลในระบบ — ปุ่ม export ใช้เป็นตัวเลือกงวด
+     * งวดและปีงบประมาณที่มีข้อมูลในระบบ — ปุ่ม export ใช้เป็นตัวเลือก
      */
     public function periods(): \Illuminate\Http\JsonResponse
     {
-        return response()->json(['data' => $this->exports->periods()]);
+        return response()->json([
+            'data'  => $this->exports->periods(),
+            'years' => $this->exports->fiscalYears(),
+        ]);
     }
 
     /**

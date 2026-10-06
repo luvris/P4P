@@ -9,6 +9,7 @@ use App\Services\PayrollFileImportService;
 use App\Services\Parsers\NewFormatPayrollParser;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 
 /**
  * นำเข้าไฟล์เงินเดือน — ใช้ได้ทั้ง HR และการเงิน
@@ -75,17 +76,22 @@ class ImportController extends Controller
      */
     public function store(Request $request)
     {
-        $request->validate([
+        $validated = $request->validate([
             'file' => 'required|file|mimes:xlsx,xls|max:10240',
+            'scope' => 'nullable|in:month,months,year',
             'fiscal_year' => 'nullable|integer|min:2500|max:2700',
             'period_month' => 'nullable|integer|min:1|max:12',
+            'period_months' => 'nullable|array|min:1|max:12',
+            'period_months.*' => 'integer|min:1|max:12',
         ], [
             'file.required' => 'กรุณาเลือกไฟล์',
             'file.mimes' => 'รองรับเฉพาะไฟล์ .xlsx หรือ .xls',
             'file.max' => 'ขนาดไฟล์ต้องไม่เกิน 10 MB',
+            'scope.in' => 'รูปแบบการนำเข้าไม่ถูกต้อง',
             'fiscal_year.integer' => 'ปีงบประมาณต้องเป็นตัวเลข',
             'period_month.min' => 'งวดเดือนต้องอยู่ระหว่าง 1-12',
             'period_month.max' => 'งวดเดือนต้องอยู่ระหว่าง 1-12',
+            'period_months.*' => 'งวดเดือนต้องอยู่ระหว่าง 1-12',
         ]);
 
         $file = $request->file('file');
@@ -102,17 +108,25 @@ class ImportController extends Controller
         }
 
         $period = $this->payrollFileImport->periodFromRequest(
-            $request->filled('period_month') ? (int) $request->input('period_month') : null,
+            $this->monthsFromRequest($validated, $request),
             $request->filled('fiscal_year') ? (int) $request->input('fiscal_year') : null,
         );
 
-        $result = $this->payrollFileImport->import(
-            $fullPath,
-            $path,
-            $originalName,
-            $request->user()->id,
-            $period
-        );
+        try {
+            $result = $this->payrollFileImport->import(
+                $fullPath,
+                $path,
+                $originalName,
+                $request->user()->id,
+                $period
+            );
+        } catch (ValidationException $e) {
+            // ไฟล์ไม่ผ่าน (งวดไม่ตรงขอบเขตที่เลือก) — ยังไม่มีอะไรถูกเขียนลงฐาน
+            // แต่ไฟล์ถูกบันทึกไว้แล้ว ต้องลบออก ไม่งั้นจะเป็นไฟล์กำพร้าในดิสก์
+            Storage::disk('local')->delete($path);
+
+            throw $e;
+        }
 
         $payrollImport = $result['payroll'];
 
@@ -166,6 +180,7 @@ class ImportController extends Controller
             'missing_income_fields' => $missingIncomeFields,
             'unlinked_summary' => $unlinkedSummary,
             'warning' => $warning,
+            'scope_warnings' => $result['scope_warnings'] ?? [],
             'uploader' => [
                 'id' => $request->user()->id,
                 'name' => $request->user()->name,
@@ -175,8 +190,28 @@ class ImportController extends Controller
     }
 
     /**
-     * ประวัติการนำเข้าไฟล์เงินเดือน
-     */
+ * เดือนที่ผู้ใช้เลือก ตามรูปแบบการนำเข้า
+ *
+ * month  → period_month (เดือนเดียว, ใช้เป็นงวดสำรองของแถวที่ไม่มีเดือน)
+ * months → period_months[] (หลายเดือน, ใช้ตรวจว่าไฟล์ตรงกับที่เลือก)
+ * year   → ไม่ส่งเดือน (ตรวจว่าทุกงวดอยู่ใน ต.ค.–ก.ย. ของปีงบที่เลือก)
+ *
+ * @return array<int, int>
+ */
+protected function monthsFromRequest(array $validated, Request $request): array
+{
+    $months = $validated['period_months'] ?? [];
+
+    if ($months === [] && $request->filled('period_month')) {
+        $months = [(int) $request->input('period_month')];
+    }
+
+    return array_values(array_unique(array_map('intval', $months)));
+}
+
+/**
+ * ประวัติการนำเข้าไฟล์เงินเดือน
+ */
     public function index(Request $request)
     {
         $imports = Import::with('uploader:id,name')
