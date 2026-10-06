@@ -125,10 +125,6 @@ const ImportPage = () => {
                 <h2 className="text-2xl font-bold text-[#8B5E3C] mb-1">
                     นำเข้าข้อมูล
                 </h2>
-                <p className="text-gray-500 text-sm">
-                    ไฟล์เงินเดือน 39 คอลัมน์ — อัปโหลดครั้งเดียวได้ทั้งทะเบียนบุคลากร
-                    และแถวเงินเดือนรายงวด
-                </p>
                 <div className="mt-3 flex flex-wrap items-start gap-2">
                     <TemplateDownloadButton
                         endpoint="/imports/template"
