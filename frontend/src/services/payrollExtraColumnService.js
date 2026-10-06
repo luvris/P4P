@@ -7,13 +7,21 @@ import api from './api';
  * คอลัมน์นั้นจะอัปโหลดได้ปกติ แต่ค่าในคอลัมน์นั้นจะว่าง
  */
 export const payrollExtraColumnService = {
+  /**
+   * คืนรายการคอลัมน์ทั้งหมด พร้อม `base_columns` = ชื่อ 39 คอลัมน์มาตรฐาน
+   * ที่ใช้เป็นตัวเลือกตำแหน่งวางคอลัมน์
+   */
   list: async () => {
     const response = await api.get('/admin/payroll-extra-columns');
     return response.data;
   },
 
   /**
-   * @param {{name: string, description?: string, data_type?: 'text'|'number'|'date'}} payload
+   * before_column / after_column คือชื่อคอลัมน์มาตรฐานที่ใช้ยึดตำแหน่ง
+   * ส่งค่า null เมื่อไม่ได้ยึด (ระบบจะต่อท้ายไฟล์)
+   *
+   * @param {{name: string, description?: string|null, data_type?: 'text'|'number'|'date',
+   *          before_column?: string|null, after_column?: string|null}} payload
    */
   create: async (payload) => {
     const response = await api.post('/admin/payroll-extra-columns', payload);

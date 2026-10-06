@@ -18,18 +18,56 @@ const TYPE_HINTS = {
     date: 'ต้องเป็น ปี-เดือน-วัน เช่น 2569-01-15 ค่าอื่นจะถูกทิ้ง',
 };
 
-const EMPTY_FORM = { name: '', description: '', data_type: 'text' };
+/** ตำแหน่งที่ไม่ต้องยึดกับคอลัมน์ใด คือต่อท้ายไฟล์ */
+const END_OF_FILE = 'end';
+
+/**
+ * ตำแหน่งของคอลัมน์เก็บเป็นข้อความกลับด้าน เพื่อส่งให้ backend เขียนได้ตรงช่อง
+ *   before:<ชื่อคอลัมน์> = ยัดไว้ก่อนคอลัมน์นั้น
+ *   after:<ชื่อคอลัมน์>  = ยัดไว้ต่อจากคอลัมน์นั้น
+ */
+const positionValue = (column) => {
+    if (column.before_column) return `before:${column.before_column}`;
+    if (column.after_column) return `after:${column.after_column}`;
+
+    return END_OF_FILE;
+};
+
+/** แปลงค่าใน select กลับเป็นข้อความอ่านเข้าใจง่าย */
+const positionLabel = (position) => {
+    const [side, ...rest] = position.split(':');
+
+    if (side === END_OF_FILE || rest.length === 0) {
+        return 'ต่อท้ายไฟล์';
+    }
+
+    return `${side === 'before' ? 'ก่อน' : 'หลัง'} ${rest.join(':')}`;
+};
+
+/** แยกค่าใน select เป็น [ด้าน, ชื่อคอลัมน์] — ต่อท้ายไฟล์คืน [null, null] */
+const splitPosition = (position) => {
+    const cut = position.indexOf(':');
+
+    if (cut < 0) {
+        return [null, null];
+    }
+
+    return [position.slice(0, cut), position.slice(cut + 1)];
+};
+
+const EMPTY_FORM = { name: '', description: '', data_type: 'text', position: END_OF_FILE };
 
 /**
  * จัดการคอลัมน์ที่ต้องการเพิ่มในไฟล์เงินเดือน
  *
- * คอลัมน์ที่เพิ่มจะต่อท้าย 39 คอลัมน์เดิมในไฟล์ต้นแบบ และค่าที่อัปโหลด
- * จะถูกเก็บแยกใน payrolls.extra_data
+ * คอลัมน์ที่เพิ่มจะถูกยัดลงไฟล์ต้นแบบตามตำแหน่งที่เลือกไว้ (ก่อน/หลังคอลัมน์ที่ระบุ
+ * หรือต่อท้ายไฟล์) และค่าที่อัปโหลดจะถูกเก็บแยกใน payrolls.extra_data
  *
  * ใช้ได้เฉพาะ admin เพราะคอลัมน์ที่เพิ่มส่งผลต่อไฟล์ต้นแบบของทุกคน
  */
 const ExtraColumnsPanel = () => {
     const [columns, setColumns] = useState([]);
+    const [baseColumns, setBaseColumns] = useState([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [editingId, setEditingId] = useState(null);
@@ -40,6 +78,8 @@ const ExtraColumnsPanel = () => {
         try {
             const result = await payrollExtraColumnService.list();
             setColumns(result.data || []);
+            // ชื่อคอลัมน์มาตรฐาน 39 ช่อง ใช้เป็นตัวเลือกตำแหน่งวางคอลัมน์
+            setBaseColumns(result.base_columns || []);
         } catch (error) {
             toast.error(error.response?.data?.message || 'โหลดรายการคอลัมน์ไม่สำเร็จ');
         } finally {
@@ -64,12 +104,17 @@ const ExtraColumnsPanel = () => {
             return;
         }
 
+        const [side, anchor] = splitPosition(form.position);
+
         setSaving(true);
         try {
             const payload = {
                 name: form.name.trim(),
                 description: form.description.trim() || null,
                 data_type: form.data_type,
+                // ส่งทั้งสองช่องเสมอ — ค่าว่างแปลว่าไม่ได้ยึดตำแหน่งนั้น
+                before_column: side === 'before' ? anchor : null,
+                after_column: side === 'after' ? anchor : null,
             };
 
             if (editingId) {
@@ -84,6 +129,8 @@ const ExtraColumnsPanel = () => {
             await load();
         } catch (error) {
             const message = error.response?.data?.errors?.name?.[0]
+                || error.response?.data?.errors?.before_column?.[0]
+                || error.response?.data?.errors?.after_column?.[0]
                 || error.response?.data?.message
                 || 'บันทึกคอลัมน์ไม่สำเร็จ';
             toast.error(message);
@@ -115,11 +162,18 @@ const ExtraColumnsPanel = () => {
             name: column.name,
             description: column.description || '',
             data_type: column.data_type || 'text',
+            position: positionValue(column),
         });
     };
 
     const activeColumns = columns.filter((c) => c.is_active);
     const inactiveColumns = columns.filter((c) => !c.is_active);
+
+    // ตำแหน่งที่บันทึกไว้อาจไม่ตรงกับแบบฟอร์มปัจจุบัน (เช่น เปลี่ยนชื่อคอลัมน์ในไฟล์ต้นแบบ)
+    // ต้องแสดงค่าเดิมไว้ให้ผู้ใช้เห็น ไม่ใช่กระโดดไปที่ตัวเลือกแรกเงียบ ๆ
+    const [currentSide, currentAnchor] = splitPosition(form.position);
+    const isUnknownPosition = currentSide !== null
+        && !baseColumns.some((name) => name === currentAnchor);
 
     return (
         <div className="rounded-2xl border border-[#E6D3A3] bg-white p-5">
@@ -128,14 +182,15 @@ const ExtraColumnsPanel = () => {
                     คอลัมน์เพิ่มเติม
                 </h3>
                 <p className="mt-1 text-xs text-gray-500">
-                    เพิ่มคอลัมน์ที่หน่วยงานต้องการเก็บเพิ่ม ระบบจะต่อท้ายลงแบบฟอร์มให้อัตโนมัติ
-                    และอ่านค่าจากไฟล์ที่อัปโหลดมาเก็บไว้ให้
+                    เพิ่มคอลัมน์ที่หน่วยงานต้องการเก็บเพิ่ม และเลือกได้ว่าจะยัดไว้ก่อนหรือหลัง
+                    คอลัมน์ไหนในแบบฟอร์ม (ถ้าไม่ระบุจะต่อท้ายไฟล์)
+                    แล้วอ่านค่าจากไฟล์ที่อัปโหลดมาเก็บไว้ให้
                 </p>
             </div>
 
             <form onSubmit={handleSubmit} className="mb-5 rounded-xl bg-[#F5EEDC]/40 p-4">
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                    <div className="md:col-span-1">
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
+                    <div>
                         <label
                             htmlFor="extra-column-name"
                             className="mb-1 block text-sm font-medium text-gray-700"
@@ -172,7 +227,46 @@ const ExtraColumnsPanel = () => {
                         </select>
                     </div>
 
-                    <div className="md:col-span-1">
+                    <div>
+                        <label
+                            htmlFor="extra-column-position"
+                            className="mb-1 block text-sm font-medium text-gray-700"
+                        >
+                            ตำแหน่งในแบบฟอร์ม
+                        </label>
+                        <select
+                            id="extra-column-position"
+                            value={form.position}
+                            onChange={(e) => setForm((f) => ({ ...f, position: e.target.value }))}
+                            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 focus:border-[#C5A059] focus:outline-none focus:ring-1 focus:ring-[#C5A059]"
+                        >
+                            <option value={END_OF_FILE}>ต่อท้ายไฟล์ (ท้ายสุด)</option>
+
+                            {isUnknownPosition && (
+                                <option value={form.position}>
+                                    {positionLabel(form.position)} — ไม่พบในแบบฟอร์ม
+                                </option>
+                            )}
+
+                            <optgroup label="วางไว้ก่อนคอลัมน์">
+                                {baseColumns.map((name) => (
+                                    <option key={`before:${name}`} value={`before:${name}`}>
+                                        ก่อน {name}
+                                    </option>
+                                ))}
+                            </optgroup>
+
+                            <optgroup label="วางไว้หลังคอลัมน์">
+                                {baseColumns.map((name) => (
+                                    <option key={`after:${name}`} value={`after:${name}`}>
+                                        หลัง {name}
+                                    </option>
+                                ))}
+                            </optgroup>
+                        </select>
+                    </div>
+
+                    <div>
                         <label
                             htmlFor="extra-column-desc"
                             className="mb-1 block text-sm font-medium text-gray-700"
@@ -218,7 +312,8 @@ const ExtraColumnsPanel = () => {
 
                 {activeColumns.length > 0 && (
                     <p className="mt-3 text-xs text-amber-700">
-                        หลังเพิ่มคอลัมน์ ผู้ใช้ต้องดาวน์โหลดแบบฟอร์มใหม่จึงจะกรอกคอลัมน์นั้นได้
+                        หลังเพิ่มหรือย้ายตำแหน่งคอลัมน์ ผู้ใช้ต้องดาวน์โหลดแบบฟอร์มใหม่
+                        จึงจะกรอกคอลัมน์นั้นได้
                     </p>
                 )}
             </form>
@@ -241,12 +336,15 @@ const ExtraColumnsPanel = () => {
                             }`}
                         >
                             <div className="min-w-0">
-                                <div className="flex items-center gap-2">
+                                <div className="flex flex-wrap items-center gap-2">
                                     <span className={`text-sm font-medium ${column.is_active ? 'text-gray-800' : 'text-gray-400 line-through'}`}>
                                         {column.name}
                                     </span>
                                     <span className="rounded-full bg-[#F5EEDC] px-2 py-0.5 text-[11px] text-[#8B5E3C]">
                                         {TYPE_LABELS[column.data_type] || column.data_type}
+                                    </span>
+                                    <span className="text-[11px] text-gray-500">
+                                        {positionLabel(positionValue(column))}
                                     </span>
                                     {!column.is_active && (
                                         <span className="text-[11px] text-gray-400">ปิดใช้งานแล้ว</span>

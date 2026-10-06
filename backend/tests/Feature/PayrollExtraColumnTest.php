@@ -135,6 +135,157 @@ class PayrollExtraColumnTest extends TestCase
         @unlink($path);
     }
 
+    // ============ ตำแหน่งของคอลัมน์ในไฟล์ ============
+
+    public function test_admin_can_choose_the_column_to_place_a_new_column_before(): void
+    {
+        $this->withoutDefaultColumns();
+
+        $response = $this->actingAs($this->admin)
+            ->postJson('/api/admin/payroll-extra-columns', [
+                'name'          => 'ค่าครองชีพเฉพาะหน่วย',
+                'before_column' => 'ตกเบิก',
+            ]);
+
+        $response->assertCreated()->assertJsonPath('data.before_column', 'ตกเบิก');
+
+        $service = app(PayrollExtraColumnService::class);
+        $service->flushCache();
+
+        $columns = $service->columnsWithExtras(NewFormatPayrollParser::TEMPLATE_COLUMNS);
+        $at = array_search('ตกเบิก', $columns, true);
+
+        // ต้องอยู่ติดกับคอลัมน์ที่เลือก ไม่ใช่ลอยไปต่อท้ายไฟล์
+        $this->assertSame('ค่าครองชีพเฉพาะหน่วย', $columns[$at - 1]);
+    }
+
+    public function test_a_column_can_be_placed_before_the_first_column_of_the_file(): void
+    {
+        $this->withoutDefaultColumns();
+
+        $this->actingAs($this->admin)
+            ->postJson('/api/admin/payroll-extra-columns', [
+                'name'          => 'ค่าครองชีพเฉพาะหน่วย',
+                'before_column' => 'ลำดับที่',
+            ])
+            ->assertCreated();
+
+        $service = app(PayrollExtraColumnService::class);
+        $service->flushCache();
+
+        $columns = $service->columnsWithExtras(NewFormatPayrollParser::TEMPLATE_COLUMNS);
+
+        // ยัดก่อนคอลัมน์แรกได้ — ซึ่ง after_column ทำไม่ได้เพราะไม่มีคอลัมน์ก่อนหน้าให้อ้าง
+        $this->assertSame(['ค่าครองชีพเฉพาะหน่วย', 'ลำดับที่'], array_slice($columns, 0, 2));
+    }
+
+    public function test_columns_sharing_the_same_anchor_keep_their_order(): void
+    {
+        $this->withoutDefaultColumns();
+
+        foreach ([['กลุ่มงานที่สอง', 5], ['กลุ่มงานแรก', 1]] as [$name, $sortOrder]) {
+            $this->actingAs($this->admin)->postJson('/api/admin/payroll-extra-columns', [
+                'name'          => $name,
+                'before_column' => 'เลขที่บัญชี',
+                'sort_order'    => $sortOrder,
+            ])->assertCreated();
+        }
+
+        $service = app(PayrollExtraColumnService::class);
+        $service->flushCache();
+
+        $columns = $service->columnsWithExtras(NewFormatPayrollParser::TEMPLATE_COLUMNS);
+        $at = array_search('เลขที่บัญชี', $columns, true);
+
+        // คอลัมน์ที่ยึดจุดเดียวกันเรียงตาม sort_order ไม่ใช่ลำดับที่สร้าง
+        $this->assertSame(
+            ['กลุ่มงานแรก', 'กลุ่มงานที่สอง'],
+            array_slice($columns, $at - 2, 2)
+        );
+    }
+
+    public function test_changing_the_anchor_clears_the_previous_one(): void
+    {
+        $this->withoutDefaultColumns();
+
+        $id = $this->actingAs($this->admin)
+            ->postJson('/api/admin/payroll-extra-columns', [
+                'name'         => 'ค่าครองชีพเฉพาะหน่วย',
+                'after_column' => 'ID CARD',
+            ])
+            ->assertCreated()->json('data.id');
+
+        $this->actingAs($this->admin)
+            ->putJson("/api/admin/payroll-extra-columns/{$id}", [
+                'name'          => 'ค่าครองชีพเฉพาะหน่วย',
+                'before_column' => 'ตกเบิก',
+                'after_column'  => null,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.before_column', 'ตกเบิก')
+            ->assertJsonPath('data.after_column', null);
+
+        // ย้ายไปต่อท้ายไฟล์ — ตำแหน่งเดิมต้องถูกล้าง ไม่ใช่ค้างอยู่
+        $this->actingAs($this->admin)
+            ->putJson("/api/admin/payroll-extra-columns/{$id}", [
+                'name'          => 'ค่าครองชีพเฉพาะหน่วย',
+                'before_column' => null,
+                'after_column'  => null,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.before_column', null);
+
+        $column = PayrollExtraColumn::findOrFail($id);
+        $this->assertNull($column->before_column);
+        $this->assertNull($column->after_column);
+    }
+
+    public function test_an_anchor_that_is_not_a_template_column_is_rejected(): void
+    {
+        $this->withoutDefaultColumns();
+
+        // ชื่อผิดแล้วคอลัมน์จะหายไปจากไฟล์ต้นแบบเงียบ ๆ ต้องห้ามไม่ให้บันทึก
+        $this->actingAs($this->admin)
+            ->postJson('/api/admin/payroll-extra-columns', [
+                'name'          => 'ค่าครองชีพเฉพาะหน่วย',
+                'before_column' => 'คอลัมน์ที่ไม่มีจริง',
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('before_column');
+    }
+
+    public function test_a_column_anchored_to_a_missing_name_still_reaches_the_file(): void
+    {
+        $this->withoutDefaultColumns();
+
+        // ข้อมูลเก่าอาจตั้งจุดยึดที่ไม่มีในแบบฟอร์มแล้ว (เช่น คอลัมน์ถูกลบทีหลัง)
+        // คอลัมน์นั้นต้องยังอยู่ในไฟล์ ไม่ใช่หายไปจนค่าที่กรอกถูกทิ้งทั้งแถว
+        PayrollExtraColumn::create([
+            'name'          => 'คอลัมน์กำพร้า',
+            'key'           => 'orphan',
+            'before_column' => 'คอลัมน์ที่ถูกลบไปแล้ว',
+        ]);
+
+        $service = app(PayrollExtraColumnService::class);
+        $service->flushCache();
+
+        $columns = $service->columnsWithExtras(NewFormatPayrollParser::TEMPLATE_COLUMNS);
+
+        $this->assertContains('คอลัมน์กำพร้า', $columns);
+        $this->assertSame('คอลัมน์กำพร้า', end($columns));
+    }
+
+    public function test_the_list_endpoint_offers_the_template_columns_as_anchor_choices(): void
+    {
+        $response = $this->actingAs($this->admin)->getJson('/api/admin/payroll-extra-columns');
+
+        $response->assertOk()
+            ->assertJsonPath('base_columns', NewFormatPayrollParser::TEMPLATE_COLUMNS)
+            // ตำแหน่งที่บันทึกไว้ต้องส่งกลับมาให้หน้าเว็บแสดงตอนกดแก้ไข
+            ->assertJsonPath('data.0.before_column', null)
+            ->assertJsonPath('data.0.after_column', 'ID CARD');
+    }
+
     public function test_only_admin_can_manage_columns(): void
     {
         $before = PayrollExtraColumn::count();

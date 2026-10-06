@@ -15,6 +15,7 @@ use Illuminate\Support\Str;
  *
  * @property int $id
  * @property string $name
+ * @property string|null $before_column
  * @property string|null $after_column
  * @property string $key
  * @property string|null $description
@@ -30,7 +31,8 @@ class PayrollExtraColumn extends Model
     public const TYPES = ['text', 'number', 'date'];
 
     protected $fillable = [
-        'name', 'after_column', 'key', 'description', 'data_type', 'is_active', 'sort_order', 'created_by',
+        'name', 'before_column', 'after_column', 'key',
+        'description', 'data_type', 'is_active', 'sort_order', 'created_by',
     ];
 
     protected $casts = [

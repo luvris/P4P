@@ -37,7 +37,8 @@ class PayrollExtraColumnService
     /**
      * ชื่อคอลัมน์ทั้งหมด (39 คอลัมน์เดิม + คอลัมน์ที่เพิ่ม) สำหรับไฟล์ต้นแบบ
      *
-     * คอลัมน์ที่ระบุ after_column จะถูกแทรกต่อจากคอลัมน์นั้นทันที
+     * คอลัมน์ที่ระบุ before_column จะถูกแทรกก่อนคอลัมน์นั้นทันที
+     * คอลัมน์ที่ระบุ after_column จะถูกแทรกต่อจากคอลัมน์นั้น
      * ที่เหลือต่อท้ายไฟล์ตามลำดับเดิม
      *
      * @param  array<int, string>  $baseColumns
@@ -45,28 +46,68 @@ class PayrollExtraColumnService
      */
     public function columnsWithExtras(array $baseColumns): array
     {
-        // แยกเป็นสองกอง: คอลัมน์ที่ต้องการตำแหน่งเจาะจง กับที่ต่อท้ายไฟล์
-        $anchored = [];
+        // แยกเป็นสามกอง: ยัดก่อน / ยัดหลัง / ต่อท้ายไฟล์
+        $before = [];
+        $after = [];
         $appended = [];
 
         foreach ($this->activeColumns() as $column) {
-            if ($column->after_column !== null && $column->after_column !== '') {
-                $anchored[$column->after_column][] = $column->name;
+            $beforeAnchor = $this->anchor($column->before_column);
+            $afterAnchor = $this->anchor($column->after_column);
+
+            if ($beforeAnchor !== null) {
+                $before[$beforeAnchor][] = $column->name;
+            } elseif ($afterAnchor !== null) {
+                $after[$afterAnchor][] = $column->name;
             } else {
                 $appended[] = $column->name;
             }
         }
 
-        foreach ($baseColumns as $index => $name) {
-            // แทรกคอลัมน์ที่ผูกกับชื่อนี้ทันทีถัดไป (ชื่อคอลัมน์ในไฟล์อาจมีช่องว่างรอบ ๆ)
-            $after = $anchored[trim($name)] ?? $anchored[$name] ?? [];
+        $ordered = [];
 
-            if ($after !== []) {
-                array_splice($baseColumns, $index + 1, 0, $after);
+        foreach ($baseColumns as $name) {
+            // ชื่อคอลัมน์ในไฟล์อาจมีช่องว่างรอบ ๆ จึงเทียบด้วยชื่อที่ trim แล้ว
+            $key = trim((string) $name);
+
+            // ก่อนคอลัมน์นี้ → ตัวคอลัมน์นี้ → หลังคอลัมน์นี้
+            foreach ($before[$key] ?? [] as $extra) {
+                $ordered[] = $extra;
+            }
+
+            $ordered[] = $name;
+
+            foreach ($after[$key] ?? [] as $extra) {
+                $ordered[] = $extra;
             }
         }
 
-        return array_merge($baseColumns, $appended);
+        $placed = array_flip($ordered);
+
+        // คอลัมน์ที่อ้างชื่อคอลัมน์ซึ่งไม่มีอยู่จริง ต้องไม่หายไปจากไฟล์
+        // (ถ้าหายไป ค่าที่ผู้ใช้กรอกในคอลัมน์นั้นจะถูกทิ้งทั้งแถวเงินเดือน)
+        foreach ([$before, $after] as $groups) {
+            foreach ($groups as $names) {
+                foreach ($names as $name) {
+                    if (! isset($placed[$name])) {
+                        $ordered[] = $name;
+                        $placed[$name] = true;
+                    }
+                }
+            }
+        }
+
+        return array_merge($ordered, $appended);
+    }
+
+    /**
+     * ชื่อคอลัมน์ที่ใช้ยึดตำแหน่ง — คืน null เมื่อไม่ได้ระบุ
+     */
+    protected function anchor(?string $column): ?string
+    {
+        $column = trim((string) $column);
+
+        return $column === '' ? null : $column;
     }
 
     /**
@@ -136,14 +177,15 @@ class PayrollExtraColumnService
     public function metadata(): array
     {
         return array_map(fn (PayrollExtraColumn $c) => [
-            'id'           => $c->id,
-            'name'         => $c->name,
-            'key'          => $c->key,
-            'description'  => $c->description,
-            'data_type'    => $c->data_type,
-            'is_active'    => $c->is_active,
-            'sort_order'   => $c->sort_order,
-            'after_column' => $c->after_column,
+            'id'            => $c->id,
+            'name'          => $c->name,
+            'key'           => $c->key,
+            'description'   => $c->description,
+            'data_type'     => $c->data_type,
+            'is_active'     => $c->is_active,
+            'sort_order'    => $c->sort_order,
+            'before_column' => $c->before_column,
+            'after_column'  => $c->after_column,
         ], $this->activeColumns());
     }
 }
