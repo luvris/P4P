@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Employee;
+use App\Models\EmployeeStatus;
 use App\Models\EmployeeType;
 use App\Models\Import;
 use App\Models\Prefix;
@@ -148,6 +149,11 @@ class NewFormatEmployeeImportService
             $prefixMap = $this->loadLookupMap(Prefix::class, 'name');
             $typeMap = $this->loadLookupMap(EmployeeType::class, 'name');
 
+            // ไฟล์เงินเดือนไม่มีคอลัมน์สถานะ — คนที่ถูกจ่ายเงินในงวดนั้นแปลว่ายังปฏิบัติงานอยู่
+            // ตั้งเป็นค่าเริ่มต้น "เฉพาะตอนสร้างใหม่" เท่านั้น ไม่แตะคนที่มีอยู่แล้ว
+            // เพื่อไม่ทับสถานะที่เจ้าหน้าที่แก้เอง (ลาออก/ลาศึกษาต่อ)
+            $activeStatusId = EmployeeStatus::activeId();
+
             foreach ($data as $row) {
                 $citizenId = trim((string) $row['citizen_id']);
 
@@ -175,8 +181,9 @@ class NewFormatEmployeeImportService
                     $updated++;
                 } else {
                     Employee::create($attributes + [
-                        'citizen_id' => $citizenId,
-                        'created_by' => $userId,
+                        'citizen_id'  => $citizenId,
+                        'status_id'   => $activeStatusId,
+                        'created_by'  => $userId,
                     ]);
                     $inserted++;
                 }
