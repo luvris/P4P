@@ -34,6 +34,7 @@ const Sidebar = ({ isOpen = true, onClose }) => {
                 // { name: 'รายชื่อบุคลากร', path: '/hr' },
                 { name: 'คำนวณเงินสำรอง', path: '/hr/reserve-fund' },
                 { name: 'ปรับฐานเงินเดือน', path: '/hr/salary-adjustments' },
+                { name: 'สรุปผลการเบิกค่าใช้จ่าย', path: '/finance/travel-expense-claims/summary' },
                 
             ],
         },

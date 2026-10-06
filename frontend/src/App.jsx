@@ -7,6 +7,7 @@ import ReserveFundPage from './pages/ReserveFund';
 import SalaryAdjustmentPage from './pages/SalaryAdjustment';
 
 import ClaimListPage from './pages/TravelExpenseClaim/ClaimListPage';
+import ClaimSummaryPage from './pages/TravelExpenseClaim/ClaimSummaryPage';
 import ProfilePage from './pages/ProfilePage';
 import ClaimFormPage from './pages/TravelExpenseClaim/ClaimFormPage';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -105,6 +106,17 @@ function App() {
             <ProtectedRoute allowedRoles={['admin', 'finance']}>
               <DashboardLayout title="สร้างใบเบิกค่าใช้จ่าย">
                 <ClaimFormPage mode="edit" />
+              </DashboardLayout>
+            </ProtectedRoute>
+          }
+        />
+        {/* สรุปผลการเบิกค่าใช้จ่าย — route คงที่ต้องมาก่อน /:id */}
+        <Route
+          path="/finance/travel-expense-claims/summary"
+          element={
+            <ProtectedRoute allowedRoles={['admin', 'hr', 'finance']}>
+              <DashboardLayout title="สรุปผลการเบิกค่าใช้จ่าย">
+                <ClaimSummaryPage />
               </DashboardLayout>
             </ProtectedRoute>
           }
