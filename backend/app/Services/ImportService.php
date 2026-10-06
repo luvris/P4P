@@ -98,6 +98,12 @@ class ImportService
                 ]);
             }
 
+            // แถวที่ไฟล์ไม่ระบุงวด → ใช้งวดที่ผู้ใช้เลือก (ทำได้เฉพาะงวดเดียว
+            // ถ้าเลือกหลายงวด PayrollFileImportService จะปฏิเสธมาก่อนถึงขั้นนี้แล้ว)
+            if ($period !== null && ($period['period_month'] ?? null) !== null) {
+                $data = $this->applyFallbackPeriod($data, $period);
+            }
+
             // ไฟล์ payroll รูปแบบใหม่ไม่มีคอลัมน์เลขบัตรประชาชน
             // → หาเลขบัตรจากทะเบียนบุคลากรด้วยชื่อ-นามสกุล ก่อนตัดสินว่าแถวไหนคือ "แถวรวมยอด"
             // (ถ้าไม่ derive ทุกแถวจะไม่มีเลขบัตรและถูกข้ามทั้งไฟล์)
@@ -275,6 +281,30 @@ class ImportService
 
             throw $e;
         }
+    }
+
+    /**
+     * เติมงวดให้แถวที่ไฟล์ไม่ได้ระบุ จากงวดสำรองที่ผู้ใช้เลือก
+     *
+     * แถวที่มีงวดของตัวเองอยู่แล้วจะไม่ถูกแตะ
+     *
+     * @param  array<int, array<string, mixed>>  $data
+     * @param  array<string, mixed>  $period
+     * @return array<int, array<string, mixed>>
+     */
+    protected function applyFallbackPeriod(array $data, array $period): array
+    {
+        foreach ($data as $index => $row) {
+            if (($row['period_month'] ?? null) !== null) {
+                continue;
+            }
+
+            $data[$index]['fiscal_year']  = $period['fiscal_year'];
+            $data[$index]['period_month'] = $period['period_month'];
+            $data[$index]['period_year']  = $period['period_year'];
+        }
+
+        return $data;
     }
 
     /**

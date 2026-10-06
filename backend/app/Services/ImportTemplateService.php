@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Services\Parsers\NewFormatPayrollParser;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
+use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
@@ -64,6 +65,14 @@ class ImportTemplateService
         $sheet = $this->sheetWithDataHeaders($spreadsheet, $columns, self::FIRST_DATA_ROW);
 
         $this->addSampleRows($sheet, $columns);
+        // จัดรูปแบบเฉพาะแถวที่ไฟล์มีจริง — ถ้าจัดล่วงหน้าหลายพันแถว
+        // getHighestRow() จะโดนไปด้วย แถวว่างที่มีแต่รูปแบบจะทำให้ผู้ใช้ลบแถวทิ้งยาก
+        $this->formatTextColumns(
+            $sheet,
+            $columns,
+            self::FIRST_DATA_ROW,
+            self::FIRST_DATA_ROW + self::SAMPLE_ROWS - 1
+        );
         $this->addMonthReferenceSheet($spreadsheet);
         $this->addPayrollInstructions($spreadsheet);
 
@@ -94,8 +103,12 @@ class ImportTemplateService
 
         foreach ($rows as $values) {
             $sheet->fromArray($values, null, 'A' . $rowNumber);
+            $this->writeTextColumns($sheet, $columns, $values, $rowNumber);
             $rowNumber++;
         }
+
+        // รูปแบบข้อความต้องครอบคลุมแถวที่เขียนจริง ผู้ใช้จะได้เติมข้อมูลต่อได้โดยไม่ถูกแปลงเป็นตัวเลข
+        $this->formatTextColumns($sheet, $columns, self::EXPORT_FIRST_DATA_ROW, $rowNumber - 1);
 
         $spreadsheet->setActiveSheetIndex(0);
 
@@ -262,6 +275,7 @@ class ImportTemplateService
             }
 
             $sheet->fromArray($values, null, 'A' . (self::FIRST_DATA_ROW + $i));
+            $this->writeTextColumns($sheet, $columns, $values, self::FIRST_DATA_ROW + $i);
             $row++;
         }
 
@@ -293,6 +307,64 @@ class ImportTemplateService
             'หมายเหตุ'       => 'ตัวอย่าง — ลบแถวนี้ก่อนบันทึกไฟล์',
             default         => 0,
         };
+    }
+
+    /**
+     * เขียนคอลัมน์รหัสตัวระบุเป็นข้อความจริง ๆ ทับค่าที่ fromArray เดาให้
+     *
+     * fromArray จะเดาค่า "3529900273541" เป็นตัวเลข Excel จึงแสดงเป็น 3.5299E+12
+     * ต้องบอกชนิดข้อมูลตรง ๆ ถึงจะเป็นข้อความตามที่ต้องการ
+     *
+     * @param  array<int, string>  $columns
+     * @param  array<int, mixed>  $values
+     */
+    protected function writeTextColumns(
+        Worksheet $sheet,
+        array $columns,
+        array $values,
+        int $rowNumber
+    ): void {
+        foreach ($columns as $i => $name) {
+            if (! in_array($name, NewFormatPayrollParser::TEXT_COLUMNS, true)) {
+                continue;
+            }
+
+            $sheet->setCellValueExplicit(
+                Coordinate::stringFromColumnIndex($i + 1) . $rowNumber,
+                trim((string) ($values[$i] ?? '')),
+                DataType::TYPE_STRING
+            );
+        }
+    }
+
+    /**
+     * ตั้งรูปแบบช่องเป็นข้อความ (@) ตั้งแต่แถวแรกที่กรอกข้อมูล
+     *
+     * ทำให้ผู้ใช้พิมพ์เลขลงไปแล้ว Excel เก็บเป็นข้อความ ไม่แปลงเป็นตัวเลขเอง
+     *
+     * @param  array<int, string>  $columns
+     */
+    protected function formatTextColumns(
+        Worksheet $sheet,
+        array $columns,
+        int $firstRow,
+        int $lastRow
+    ): void {
+        // ช่วงว่างจะกลายเป็นช่องว่างที่มีรูปแบบ ทำให้ไฟล์ที่ไม่มีข้อมูลมีแถวเกินมา
+        if ($lastRow < $firstRow) {
+            return;
+        }
+
+        foreach ($columns as $i => $name) {
+            if (! in_array($name, NewFormatPayrollParser::TEXT_COLUMNS, true)) {
+                continue;
+            }
+
+            $letter = Coordinate::stringFromColumnIndex($i + 1);
+
+            $sheet->getStyle($letter . $firstRow . ':' . $letter . $lastRow)
+                ->getNumberFormat()->setFormatCode('@');
+        }
     }
 
     protected function columnWidth(string $name): float
@@ -356,6 +428,8 @@ class ImportTemplateService
             ['  • ห้ามมีแถวรวมยอดท้ายไฟล์ (ระบบจะข้ามให้ แต่ไม่ต้องใส่)'],
             ['  • ช่องว่างหรือ "-" จะถูกนับเป็น 0'],
             ['  • พิมพ์จำนวนเงินได้เลย มี comma หรือไม่ก็ได้'],
+            ['  • คอลัมน์รหัส (ตำแหน่งเลขที่ / ID CARD / เลขที่บัญชี) ควรตั้งรูปแบบช่องเป็น "ข้อความ" ก่อนพิมพ์'],
+            ['    ไม่งั้น Excel จะแปลงเป็นตัวเลข แล้วเลขบัตรประชาชน 13 หลักจะกลายเป็น 3.5299E+12'],
         ];
 
         foreach ($lines as $i => $line) {
