@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react';
 import { X, Save, UserPlus, Pencil, Eye } from 'lucide-react';
+import { formatCurrency } from '../../utils/format';
 
 /**
  * Initial form state
@@ -65,6 +66,10 @@ Field.displayName = 'Field';
  */
 const AddEmployeeDrawer = ({ open, onClose, lookups = {}, onSubmit, employee = null, readOnly = false }) => {
     const isEditing = Boolean(employee);
+
+    const latestPeriod = employee?.latest_period_year
+        ? ` งวด ${employee.latest_period_month ?? '-'}/${employee.latest_period_year}`
+        : '';
 
     const [form, setForm] = useState(INITIAL_FORM);
     const [errors, setErrors] = useState({});
@@ -294,6 +299,12 @@ const AddEmployeeDrawer = ({ open, onClose, lookups = {}, onSubmit, employee = n
                             step="0.01"
                             className={inputCls('salary')}
                         />
+                        {/* เงินเดือนล่าสุดจากไฟล์เงินเดือน — โชว์อย่างเดียว ไม่กระทบค่าที่บันทึก */}
+                        {employee?.latest_salary != null && employee.latest_salary !== '' && (
+                            <p className="mt-1 text-xs text-amber-700">
+                                ล่าสุดจากไฟล์เงินเดือน: {formatCurrency(employee.latest_salary)} บาท{latestPeriod}
+                            </p>
+                        )}
                     </Field>
 
                     {/* ประเภทบุคลากร */}
