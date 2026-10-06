@@ -125,6 +125,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/{import}', [ImportController::class, 'show']);
     });
 
+    // สรุปผลการเบิกค่าใช้จ่าย — อ่านอย่างเดียว เปิดให้ hr ดูได้ด้วย (เมนูฝั่ง HR)
+    // ต้องประกาศก่อนกลุ่ม finance เพื่อไม่ให้ route /{claim} จับคำว่า "summary" ไว้ก่อน
+    Route::middleware('role:admin,hr,finance')->prefix('finance')->group(function () {
+        Route::get('/travel-expense-claims/summary', [TravelExpenseClaimController::class, 'summary']);
+    });
     // ========================================
     // Finance Routes (role: admin, finance)
     // ========================================

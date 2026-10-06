@@ -9,6 +9,7 @@ use App\Models\Employee;
 use App\Models\TravelExpenseClaim;
 use App\Models\TravelExpenseClaimItem;
 use App\Services\TravelExpenseClaimExporter;
+use App\Services\TravelExpenseClaimSummaryService;
 use App\Support\ThaiFiscalYear;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
@@ -301,6 +302,41 @@ class TravelExpenseClaimController extends Controller
             ]);
 
         return response()->json(['data' => $employees]);
+    }
+
+    /**
+     * GET /api/finance/travel-expense-claims/summary
+     * สรุปผลการเบิกค่าใช้จ่าย — ยอดแยกตาม ภารกิจ → กลุ่มงาน → งาน
+     *
+     * ทุกยอด (totals / buckets / ranking) คำนวณจาก query ฐานเดียวกัน
+     * ตามตัวกรองที่ส่งมาทั้งชุด จึงใช้ข้อมูลชุดเดียวกันเสมอ
+     */
+    public function summary(Request $request, TravelExpenseClaimSummaryService $service): JsonResponse
+    {
+        $validated = $request->validate([
+            'fiscal_year'   => ['nullable', 'integer', 'min:' . ThaiFiscalYear::MIN, 'max:' . ThaiFiscalYear::MAX],
+            'level'         => ['nullable', 'in:duty,group,work'],
+            'duty_id'       => ['nullable', 'integer', 'min:1'],
+            'group_id'      => ['nullable', 'integer', 'min:1'],
+            'work_id'       => ['nullable', 'integer', 'min:1'],
+            // ช่วง "เดือนที่เบิก" — ระบบไม่มีวันที่เดินทางจริง จึงกรองด้วย claim_period
+            'period_from'   => ['nullable', 'date_format:Y-m-d'],
+            'period_to'     => ['nullable', 'date_format:Y-m-d'],
+            // ค่าเริ่มต้นนับเฉพาะยืนยันแล้ว — เปิดรวมใบร่างได้ แต่ยกเลิกไม่นับเสมอ
+            'include_draft' => ['nullable', 'boolean'],
+        ]);
+
+        $level = $validated['level'] ?? TravelExpenseClaimSummaryService::LEVEL_DUTY;
+
+        // ระดับลูกต้องระบุพ่อแม่ของมัน (สัมพันธ์กับระดับที่เลือก)
+        if ($level === TravelExpenseClaimSummaryService::LEVEL_GROUP && empty($validated['duty_id'])) {
+            return response()->json(['message' => 'ต้องระบุภารกิจ (duty_id) เพื่อดูระดับกลุ่มงาน'], 422);
+        }
+        if ($level === TravelExpenseClaimSummaryService::LEVEL_WORK && empty($validated['group_id'])) {
+            return response()->json(['message' => 'ต้องระบุกลุ่มงาน (group_id) เพื่อดูระดับงาน'], 422);
+        }
+
+        return response()->json(['data' => $service->summary($validated)]);
     }
 
     /**
