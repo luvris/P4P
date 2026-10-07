@@ -124,7 +124,11 @@ const ClaimSummaryPage = () => {
                         buckets={buckets}
                         onDrillDown={drillDown}
                     />
-                    <ClaimRankingTable ranking={ranking} />
+                    {/* key เปลี่ยนเมื่อตัวกรอง/ปีงบประมาณเปลี่ยน → remount → กลับหน้าแรกของอันดับเสมอ */}
+                    <ClaimRankingTable
+                        key={`${fiscalYear}-${JSON.stringify(filters)}`}
+                        ranking={ranking}
+                    />
                 </>
             ) : (
                 <div className="rounded-xl border border-gray-200 bg-white px-4 py-10 text-center text-sm text-gray-500">

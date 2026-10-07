@@ -63,6 +63,30 @@ const Sidebar = ({ isOpen = true, onClose }) => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [location.pathname]);
 
+    /**
+     * ไฮไลต์ตามลิงก์ย่อยที่ active จริง — ไม่ใช่ startsWith ของพาทหมวด
+     * เพราะพาทหมวดการเงิน (/finance/travel-expense-claims) เป็น prefix ของ
+     * หน้าสรุป (/finance/travel-expense-claims/summary) ที่อยู่หมวดบริหารงานบุคคล
+     *
+     * ถ้ามีลิงก์ย่อยที่ตรงพอดี (exact) เมนูใดเมนูหนึ่ง ใช้ exact เท่านั้น
+     * เพื่อกันสองหมวดไฮไลต์พร้อมกัน จึงค่อยใช้ prefix ต่อเมื่อไม่มี exact เลย
+     * (เช่น หน้า /create, /:id ที่ไม่มีลิงก์ย่อยตรงเป๊ะ ยังไฮไลต์หมวดการเงินได้)
+     */
+    const hasExactChild = menuItems.some((item) =>
+        item.children?.some((child) => location.pathname === child.path),
+    );
+
+    const isChildActive = (child) =>
+        hasExactChild
+            ? location.pathname === child.path
+            : location.pathname === child.path
+                || location.pathname.startsWith(`${child.path}/`);
+
+    const isItemActive = (item) =>
+        item.children
+            ? item.children.some(isChildActive)
+            : location.pathname.startsWith(item.path);
+
     const toggleMenu = (path) => {
         setOpenMenus((prev) => ({ ...prev, [path]: !prev[path] }));
     };
@@ -107,7 +131,7 @@ const Sidebar = ({ isOpen = true, onClose }) => {
                     if (!hasRole(...item.roles)) return null;
 
                     const Icon = item.icon;
-                    const isActive = location.pathname.startsWith(item.path);
+                    const isActive = isItemActive(item);
                     const hasChildren = item.children && item.children.length > 0;
                     const isMenuOpen = openMenus[item.path];
 
@@ -157,7 +181,7 @@ const Sidebar = ({ isOpen = true, onClose }) => {
                                             key={child.path}
                                             to={child.path}
                                             onClick={handleItemClick}
-                                            className={`block px-4 py-2 rounded-lg text-sm transition-colors ${location.pathname === child.path
+                                            className={`block px-4 py-2 rounded-lg text-sm transition-colors ${isChildActive(child)
                                                     ? 'bg-[#F5EEDC] text-[#8B5E3C] font-medium'
                                                     : 'text-gray-500 hover:bg-gray-50'
                                                 }`}
