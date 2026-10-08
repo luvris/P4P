@@ -206,7 +206,30 @@ class NewFormatPayrollParser
      */
     public static function fieldForColumn(string $column): ?string
     {
-        return self::COLUMN_MAP[self::normalizeHeader($column)] ?? null;
+        return self::normalizedColumnMap()[self::normalizeHeader($column)] ?? null;
+    }
+
+    /**
+     * COLUMN_MAP ที่ normalize ชื่อคอลัมน์เป็น key เดียวกันกับหัวตารางที่อ่านจากไฟล์
+     *
+     * จำเป็นเพราะ normalizeHeader เปลี่ยน "-" เป็นช่องว่าง (เว้นแต่ map จะเก็บ key ดิบไว้
+     * ทําให้คอลัมน์อย่าง "บ่าย-ดึก เงินงบประมาณ" จับคู่ไม่ได้)
+     *
+     * @return array<string, string>
+     */
+    protected static function normalizedColumnMap(): array
+    {
+        static $map = null;
+
+        if ($map === null) {
+            $map = [];
+
+            foreach (self::COLUMN_MAP as $header => $field) {
+                $map[self::normalizeHeader($header)] = $field;
+            }
+        }
+
+        return $map;
     }
 
     /**
@@ -395,6 +418,7 @@ class NewFormatPayrollParser
     {
         $indexes = [];
         $extraHeaders = $this->extraColumnHeaders();
+        $columnMap = self::normalizedColumnMap();
 
         foreach ($row as $index => $cell) {
             $name = self::normalizeHeader($cell);
@@ -403,8 +427,8 @@ class NewFormatPayrollParser
                 continue;
             }
 
-            if (isset(self::COLUMN_MAP[$name])) {
-                $indexes[self::COLUMN_MAP[$name]] = $index;
+            if (isset($columnMap[$name])) {
+                $indexes[$columnMap[$name]] = $index;
 
                 continue;
             }
