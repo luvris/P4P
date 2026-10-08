@@ -13,11 +13,38 @@ const todayStr = () => {
 
 const INITIAL_FORM = {
     employee_id: '',
-    old_salary: '',
+    expected_old_salary: '',
     new_salary: '',
     adjustment_date: todayStr(),
     adjustment_type: 'ครบ 6 เดือน',
     note: '',
+};
+
+// ที่มาของฐานเงินเดือนที่แสดงให้ HR เห็น
+const BASE_SOURCE_LABELS = {
+    salary: 'เงินเดือนปัจจุบันในทะเบียน',
+    latest_salary: 'ฐานเริ่มต้นจากไฟล์เงินเดือนล่าสุด',
+};
+
+/**
+ * เงินเดือนก่อนปรับ = salary ?? latest_salary (ค่า 0 เป็นค่าจริง — ห้ามใช้ truthy check)
+ * คืนทั้งค่าที่แสดงและแหล่งที่มา
+ */
+const baseFromEmployee = (emp) => {
+    if (!emp) return { value: '', source: null };
+    if (emp.salary != null && emp.salary !== '') {
+        return { value: String(emp.salary), source: 'salary' };
+    }
+    if (emp.latest_salary != null && emp.latest_salary !== '') {
+        return { value: String(emp.latest_salary), source: 'latest_salary' };
+    }
+    return { value: '', source: null };
+};
+
+// แสดงส่วนต่าง — ติดลบมี "-" มากกว่าศูนย์มี "+" ศูนย์ไม่มีเครื่องหมาย
+const signedCurrency = (value) => {
+    const sign = value > 0 ? '+' : value < 0 ? '-' : '';
+    return `${sign}${formatCurrency(Math.abs(value))}`;
 };
 
 const Field = ({ label, required, error, children }) => (
@@ -43,6 +70,11 @@ const AddAdjustmentDrawer = ({ open, onClose, onSubmit }) => {
     const [submitting, setSubmitting] = useState(false);
 
     const [selectedEmployee, setSelectedEmployee] = useState(null);
+    // แหล่งที่มาของฐานที่แสดง ('salary' | 'latest_salary' | null)
+    const [baseSource, setBaseSource] = useState(null);
+
+    // id ของพนักงานที่เลือกอยู่จริง ณ ตอนนี้ — ใช้ตรวจว่า 409 ที่กลับมาเป็นของคนนี้หรือไม่
+    const employeeIdRef = useRef('');
 
     const onCloseRef = useRef(onClose);
     useEffect(() => {
@@ -56,6 +88,8 @@ const AddAdjustmentDrawer = ({ open, onClose, onSubmit }) => {
             setErrors({});
             setGlobalError('');
             setSelectedEmployee(null);
+            setBaseSource(null);
+            employeeIdRef.current = '';
         }
     }, [open]);
 
@@ -75,68 +109,115 @@ const AddAdjustmentDrawer = ({ open, onClose, onSubmit }) => {
         setGlobalError('');
     }, []);
 
-    const handleSelectEmployee = useCallback((emp) => {
-        if (!emp) return;
+    // เลือก/เปลี่ยน/ล้างพนักงาน — ฐานและแหล่งที่มาถูกอัปเดต/ล้างทันที ห้ามค้างของคนก่อน
+    const applyEmployee = useCallback((emp) => {
+        const { value, source } = baseFromEmployee(emp);
+        employeeIdRef.current = emp ? String(emp.id) : '';
         setForm((prev) => ({
             ...prev,
-            employee_id: emp.id,
-            old_salary: emp.salary != null ? String(emp.salary) : prev.old_salary,
+            employee_id: emp ? emp.id : '',
+            expected_old_salary: value,
         }));
-        setSelectedEmployee(emp);
+        setSelectedEmployee(emp ?? null);
+        setBaseSource(emp ? source : null);
         setErrors((prev) => ({ ...prev, employee_id: undefined }));
         setGlobalError('');
     }, []);
 
-    const handleClearEmployee = useCallback(() => {
-        setSelectedEmployee(null);
-        setField('employee_id', '');
-    }, [setField]);
+    const handleSelectEmployee = useCallback(
+        (emp) => {
+            if (!emp) return;
+            applyEmployee(emp);
+        },
+        [applyEmployee],
+    );
 
-    const increaseAmount = useMemo(() => {
-        const o = Number(form.old_salary);
+    const handleClearEmployee = useCallback(() => {
+        applyEmployee(null);
+    }, [applyEmployee]);
+
+    // คำนวณสดระหว่างกรอก — ค่าว่างไม่ถูกตีความเป็น 0
+    const baseAmount = useMemo(() => {
+        if (form.expected_old_salary === '') return null;
+        const n = Number(form.expected_old_salary);
+        return Number.isNaN(n) ? null : n;
+    }, [form.expected_old_salary]);
+
+    const newAmount = useMemo(() => {
+        if (form.new_salary === '') return null;
         const n = Number(form.new_salary);
-        if (form.old_salary === '' || form.new_salary === '' || Number.isNaN(o) || Number.isNaN(n)) {
-            return null;
-        }
-        return n - o;
-    }, [form.old_salary, form.new_salary]);
+        return Number.isNaN(n) ? null : n;
+    }, [form.new_salary]);
+
+    const increaseAmount = baseAmount !== null && newAmount !== null ? newAmount - baseAmount : null;
+
+    const hasBase = form.employee_id !== '' && form.expected_old_salary !== '';
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+
+        // กันการ submit ตอนไม่มีฐาน (ปุ่มปิดอยู่แล้ว แต่กันเคส Enter ในฟอร์ม)
+        if (form.employee_id !== '' && form.expected_old_salary === '') {
+            setGlobalError('ไม่มีข้อมูลฐานเงินเดือน');
+            return;
+        }
+
         setSubmitting(true);
         setErrors({});
         setGlobalError('');
 
         const payload = {
             employee_id: form.employee_id,
-            old_salary: form.old_salary === '' ? null : Number(form.old_salary),
             new_salary: form.new_salary === '' ? null : Number(form.new_salary),
+            expected_old_salary: form.expected_old_salary === '' ? null : Number(form.expected_old_salary),
             adjustment_date: form.adjustment_date,
             adjustment_type: form.adjustment_type || null,
             note: form.note || null,
         };
+        const submittedEmployeeId = String(form.employee_id);
 
         const result = await onSubmit?.(payload);
         setSubmitting(false);
 
         if (result?.success) {
             onClose?.();
-        } else {
-            setErrors(result?.errors || {});
-            setGlobalError(result?.error || 'ไม่สามารถบันทึกข้อมูลได้');
+            return;
         }
+
+        // 409 SALARY_BASE_CHANGED — อัปเดตฐานให้ตรวจใหม่ แล้วรอให้ HR กดยืนยันเอง (ไม่ส่งซ้ำอัตโนมัติ)
+        if (result?.conflict?.code === 'SALARY_BASE_CHANGED') {
+            const conflict = result.conflict;
+
+            // response ไม่ใช่ของพนักงานที่เลือกอยู่ → ห้ามนำมาทับฟอร์มปัจจุบัน
+            if (String(employeeIdRef.current) !== submittedEmployeeId) {
+                setGlobalError('ข้อมูลบุคลากรที่เลือกเปลี่ยนแปลงระหว่างบันทึก กรุณาตรวจสอบและลองใหม่');
+                return;
+            }
+
+            const data = conflict.data || {};
+            const latestBase = data.base ?? '';
+
+            setForm((prev) => ({
+                ...prev,
+                expected_old_salary: latestBase === '' ? '' : String(Number(latestBase)),
+            }));
+            setBaseSource(data.base_source ?? null);
+            setSelectedEmployee((prev) =>
+                prev
+                    ? { ...prev, salary: data.salary ?? null, latest_salary: data.latest_salary ?? null }
+                    : prev,
+            );
+            setGlobalError(
+                conflict.message || 'เงินเดือนของพนักงานถูกเปลี่ยนระหว่างทำรายการ กรุณาตรวจสอบยอดใหม่และยืนยันอีกครั้ง',
+            );
+            return;
+        }
+
+        setErrors(result?.errors || {});
+        setGlobalError(result?.error || 'ไม่สามารถบันทึกข้อมูลได้');
     };
 
     if (!open) return null;
-
-    const increaseDisplay =
-        increaseAmount === null
-            ? null
-            : {
-                  amount: formatCurrency(increaseAmount),
-                  positive: increaseAmount > 0,
-                  negative: increaseAmount < 0,
-              };
 
     return (
         <>
@@ -181,20 +262,28 @@ const AddAdjustmentDrawer = ({ open, onClose, onSubmit }) => {
                         />
                     </Field>
 
-                    {/* เงินเดือนเก่า */}
-                    <Field label="เงินเดือนเก่า" required error={errors.old_salary}>
+                    {/* เงินเดือนก่อนปรับ — ฐานจากระบบ (readOnly) HR ดูอย่างเดียว */}
+                    <Field label="เงินเดือนก่อนปรับ" required error={errors.expected_old_salary}>
                         <input
                             type="number"
-                            value={form.old_salary}
-                            onChange={(e) => setField('old_salary', e.target.value)}
-                            placeholder="ระบุเงินเดือนเดิม"
+                            value={form.expected_old_salary}
+                            readOnly
+                            placeholder={
+                                selectedEmployee ? 'ไม่มีข้อมูลฐานเงินเดือน' : 'เลือกบุคลากรเพื่อดูฐานเงินเดือน'
+                            }
                             min="0"
                             step="0.01"
-                            className={inputCls(errors.old_salary)}
+                            className={`${inputCls(errors.expected_old_salary)} bg-gray-50 text-gray-700 cursor-default`}
                         />
+                        {selectedEmployee && baseSource && (
+                            <p className="mt-1 text-xs text-gray-500">{BASE_SOURCE_LABELS[baseSource]}</p>
+                        )}
+                        {selectedEmployee && !baseSource && (
+                            <p className="mt-1 text-xs text-red-600">ไม่มีข้อมูลฐานเงินเดือน</p>
+                        )}
                     </Field>
 
-                    {/* เงินเดือนใหม่ */}
+                    {/* เงินเดือนใหม่ — HR กรอกเฉพาะช่องนี้ */}
                     <Field label="เงินเดือนใหม่" required error={errors.new_salary}>
                         <input
                             type="number"
@@ -207,17 +296,19 @@ const AddAdjustmentDrawer = ({ open, onClose, onSubmit }) => {
                         />
                     </Field>
 
-                    {/* สรุปยอดปรับ */}
-                    {increaseDisplay && (
+                    {/* สรุปยอดปรับ — คำนวณสด */}
+                    {increaseAmount !== null && (
                         <div
                             className={`rounded-lg px-3 py-2 text-sm border ${
-                                increaseDisplay.negative
+                                increaseAmount < 0
                                     ? 'bg-red-50 border-red-200 text-red-700'
                                     : 'bg-emerald-50 border-emerald-200 text-emerald-700'
                             }`}
                         >
-                            ปรับ{' '}
-                            <span className="font-semibold">{increaseDisplay.amount} บาท</span>
+                            <div>
+                                ปรับ{' '}
+                                <span className="font-semibold">{signedCurrency(increaseAmount)} บาท</span>
+                            </div>
                         </div>
                     )}
 
@@ -271,7 +362,7 @@ const AddAdjustmentDrawer = ({ open, onClose, onSubmit }) => {
                     <button
                         type="submit"
                         form="add-adjustment-form"
-                        disabled={submitting}
+                        disabled={submitting || !hasBase}
                         className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-amber-600 hover:bg-amber-700 rounded-lg disabled:opacity-50"
                     >
                         {submitting ? (

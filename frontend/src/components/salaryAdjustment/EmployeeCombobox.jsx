@@ -27,6 +27,16 @@ const Highlight = ({ text, term }) => {
 };
 
 /**
+ * เงินเดือนปัจจุบันของพนักงาน = salary (ฐานที่ปรับแล้ว) ?? latest_salary (จากไฟล์ล่าสุด)
+ * ใช้ null check ไม่ใช่ truthy check — ค่า 0 เป็นค่าจริงห้ามถูกข้าม
+ */
+const currentSalaryOf = (emp) => {
+    if (emp?.salary != null && emp?.salary !== '') return emp.salary;
+    if (emp?.latest_salary != null && emp?.latest_salary !== '') return emp.latest_salary;
+    return null;
+};
+
+/**
  * เลือกบุคลากรแบบพิมพ์แล้วเด้ง
  *
  * พิมพ์ชื่อหรือเลขบัตรประชาชนแล้วรายการเด้งขึ้นทันที
@@ -127,6 +137,8 @@ const EmployeeCombobox = ({ value, onSelect, onClear, error, disabled = false })
 
     // เลือกแล้ว → แสดงสรุปผู้ที่เลือก พร้อมปุ่มเปลี่ยน/ล้าง
     if (value) {
+        const currentSalary = currentSalaryOf(value);
+
         return (
             <div className="rounded-lg border border-amber-300 bg-amber-50/60 px-3 py-2">
                 <div className="flex items-start gap-2">
@@ -139,9 +151,9 @@ const EmployeeCombobox = ({ value, onSelect, onClear, error, disabled = false })
                             เลขบัตรประชาชน: {value.citizen_id || '-'}
                             {value.position_name ? ` · ${value.position_name}` : ''}
                         </p>
-                        {value.salary != null && (
+                        {currentSalary != null && (
                             <p className="mt-0.5 text-xs text-gray-500">
-                                เงินเดือนปัจจุบัน: {formatCurrency(value.salary)} บาท
+                                เงินเดือนปัจจุบัน: {formatCurrency(currentSalary)} บาท
                             </p>
                         )}
                     </div>
@@ -215,7 +227,9 @@ const EmployeeCombobox = ({ value, onSelect, onClear, error, disabled = false })
 
                     {results.length > 0 && (
                         <ul role="listbox" className="max-h-60 overflow-y-auto py-1">
-                            {results.map((emp, index) => (
+                            {results.map((emp, index) => {
+                                const currentSalary = currentSalaryOf(emp);
+                                return (
                                 <li key={emp.id}>
                                     <button
                                         type="button"
@@ -242,14 +256,15 @@ const EmployeeCombobox = ({ value, onSelect, onClear, error, disabled = false })
                                                 {emp.position_name ? ` · ${emp.position_name}` : ''}
                                             </span>
                                         </span>
-                                        {emp.salary != null && (
+                                        {currentSalary != null && (
                                             <span className="shrink-0 text-xs text-gray-500">
-                                                {formatCurrency(emp.salary)} บาท
+                                                {formatCurrency(currentSalary)} บาท
                                             </span>
                                         )}
                                     </button>
                                 </li>
-                            ))}
+                                );
+                            })}
                         </ul>
                     )}
                 </div>

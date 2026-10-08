@@ -5,12 +5,22 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Employee;
 use App\Models\SalaryAdjustment;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class SalaryAdjustmentController extends Controller
 {
+    /** ความจุตาม schema จริง — money: decimal(12,2), percent: decimal(6,2) */
+    private const MONEY_MAX = 9999999999.99;
+
+    private const PERCENT_MAX = 9999.99;
+
+    /** ทศนิยมของเงินเดือน (decimal(12,2)) ใช้ตอน normalize ค่าก่อนเทียบ/บันทึก */
+    private const MONEY_SCALE = 2;
+
     // GET /api/hr/salary-adjustments
     // รายการ log การปรับฐานเงินเดือน (pagination + search + filter)
     public function index(Request $request): JsonResponse
@@ -66,47 +76,115 @@ class SalaryAdjustmentController extends Controller
 
     // POST /api/hr/salary-adjustments
     // บันทึกการปรับฐานเงินเดือน + อัปเดต salary บนตาราง employees
+    //
+    // Contract:
+    // - ฐานเงินเดือนปัจจุบัน = employees.salary ?? employees.latest_salary (ค่า 0 ถือเป็นค่าจริง)
+    // - expected_old_salary ใช้ตรวจว่าฐานที่ HR เห็นยังตรงกับ DB เท่านั้น (ไม่ได้ใช้สร้างประวัติ)
+    // - สร้างประวัติ + อัปเดต salary ต้องสำเร็จพร้อมกัน มิฉะนั้น rollback ทั้งคู่
+    // - ไม่แตะ employees.latest_salary (คือเงินเดือนจากรายการไฟล์ล่าสุด)
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
             'employee_id' => 'required|exists:employees,id',
-            'old_salary' => 'required|numeric|min:0',
-            'new_salary' => 'required|numeric|min:0',
+            'new_salary' => ['required', 'numeric', 'min:0', 'max:' . self::MONEY_MAX],
+            'expected_old_salary' => ['required', 'numeric', 'min:0', 'max:' . self::MONEY_MAX],
             'adjustment_date' => 'required|date',
             'adjustment_type' => 'nullable|string|max:50',
             'note' => 'nullable|string|max:1000',
+        ], [
+            'new_salary.max' => 'เงินเดือนใหม่เกินขอบเขตที่ระบบรองรับ',
+            'expected_old_salary.max' => 'เงินเดือนก่อนปรับเกินขอบเขตที่ระบบรองรับ',
         ]);
 
-        $oldSalary = (float) $validated['old_salary'];
-        $newSalary = (float) $validated['new_salary'];
-        $increase = round($newSalary - $oldSalary, 2);
-        $percent = $oldSalary > 0
-            ? round(($increase / $oldSalary) * 100, 2)
-            : null;
+        $userId = $request->user()?->id;
 
-        $adjustment = DB::transaction(function () use ($request, $validated, $oldSalary, $newSalary, $increase, $percent) {
+        $result = DB::transaction(function () use ($validated, $userId) {
+            // ล็อกแถวก่อนอ่านฐาน — กันสองคำขอเห็นฐานเดียวกันพร้อมกัน
+            $employee = Employee::whereKey($validated['employee_id'])->lockForUpdate()->first();
+
+            if (! $employee) {
+                // ผ่าน validation แต่ไม่มีแถวจริง (เช่น ถูกระหว่าง validate) → ตอบแบบ not-found ของระบบ ไม่บันทึกอะไร
+                throw (new ModelNotFoundException)->setModel(Employee::class, $validated['employee_id']);
+            }
+
+            // cast decimal:2 ได้ string|null — ห้ามใช้ truthy check เพราะค่า 0 เป็นค่าจริง
+            $salary = $employee->salary;
+            $latest = $employee->latest_salary;
+
+            $baseValue = $salary ?? $latest;
+            $baseSource = $salary !== null ? 'salary' : 'latest_salary';
+
+            if ($baseValue === null) {
+                return ['error' => response()->json(['message' => 'ไม่มีข้อมูลฐานเงินเดือน'], 422)];
+            }
+
+            $base = round((float) $baseValue, self::MONEY_SCALE);
+
+            // ตรวจว่าฐานที่ HR เห็นยังตรงกับ DB — normalize ตาม precision เงินเดือนก่อนเทียบ (15000 == 15000.00)
+            $expected = number_format((float) $validated['expected_old_salary'], self::MONEY_SCALE, '.', '');
+            $actual = number_format($base, self::MONEY_SCALE, '.', '');
+
+            if ($expected !== $actual) {
+                return ['error' => response()->json([
+                    'message' => 'เงินเดือนของพนักงานถูกเปลี่ยนระหว่างทำรายการ กรุณาตรวจสอบยอดใหม่และยืนยันอีกครั้ง',
+                    'code' => 'SALARY_BASE_CHANGED',
+                    'data' => [
+                        'base' => $base,
+                        'base_source' => $baseSource,
+                        'salary' => $salary !== null ? (float) $salary : null,
+                        'latest_salary' => $latest !== null ? (float) $latest : null,
+                    ],
+                ], 409)];
+            }
+
+            $newSalary = round((float) $validated['new_salary'], self::MONEY_SCALE);
+            $increase = round($newSalary - $base, self::MONEY_SCALE);
+            // ฐาน 0 → เก็บ percent เป็น null ห้ามหารด้วยศูนย์
+            $percent = $base > 0
+                ? round($increase / $base * 100, 2)
+                : null;
+
+            // ตรวจความจุคอลัมน์ตาม schema ก่อนเขียนข้อมูล — ห้ามให้ truncate/บันทึกผิด
+            if ($newSalary > self::MONEY_MAX || abs($increase) > self::MONEY_MAX) {
+                throw ValidationException::withMessages([
+                    'new_salary' => 'ยอดเงินที่คำนวณได้เกินขอบเขตที่ระบบรองรับ',
+                ]);
+            }
+
+            if ($percent !== null && abs($percent) > self::PERCENT_MAX) {
+                throw ValidationException::withMessages([
+                    'new_salary' => 'เปอร์เซ็นต์การปรับที่คำนวณได้เกินขอบเขตที่ระบบรองรับ',
+                ]);
+            }
+
             $adjustment = SalaryAdjustment::create([
-                'employee_id' => $validated['employee_id'],
-                'old_salary' => $oldSalary,
+                'employee_id' => $employee->id,
+                'old_salary' => $base, // ฐานจริงจาก DB เสมอ (ไม่ใช่ค่าจาก client)
                 'new_salary' => $newSalary,
                 'increase_amount' => $increase,
                 'increase_percent' => $percent,
                 'adjustment_date' => $validated['adjustment_date'],
                 'adjustment_type' => $validated['adjustment_type'] ?? null,
                 'note' => $validated['note'] ?? null,
-                'created_by' => $request->user()?->id,
-                'updated_by' => $request->user()?->id,
+                'created_by' => $userId,
+                'updated_by' => $userId,
             ]);
 
-            // อัปเดตเงินเดือนล่าสุดให้พนักงาน
-            Employee::where('id', $validated['employee_id'])->update([
+            // อัปเดตฐานเงินเดือนให้พนักงาน — ใน transaction เดียวกับการสร้างประวัติ
+            // ไม่แตะ latest_salary
+            $employee->update([
                 'salary' => $newSalary,
-                'updated_by' => $request->user()?->id,
+                'updated_by' => $userId,
             ]);
 
-            return $adjustment;
+            return ['adjustment' => $adjustment];
         });
 
+        if (isset($result['error'])) {
+            return $result['error'];
+        }
+
+        $adjustment = $result['adjustment'];
         $adjustment->load(['employee' => fn ($q) => $q->with('prefix'), 'creator']);
 
         return response()->json([

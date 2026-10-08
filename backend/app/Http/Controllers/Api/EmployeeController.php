@@ -260,7 +260,10 @@ class EmployeeController extends Controller
             'first_name'    => $employee->first_name,
             'last_name'     => $employee->last_name,
             'position_name' => $employee->position?->name,
+            // salary = ฐานที่ปรับแล้ว, latest_salary = ค่าจากไฟล์เงินเดือนล่าสุด
+            // ฝั่ง UI ใช้ salary ?? latest_salary เป็น "เงินเดือนปัจจุบัน"
             'salary'        => $employee->salary,
+            'latest_salary' => $employee->latest_salary,
             'near'          => $near,
             'distance'      => $distance,
         ];

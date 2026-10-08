@@ -106,9 +106,26 @@ const useSalaryAdjustments = (initialFilters = {}) => {
             await Promise.all([fetchItems(), fetchSummary()]);
             return { success: true, data: response.data?.data };
         } catch (err) {
+            const status = err.response?.status;
+            const body = err.response?.data;
+
+            // ฐานเปลี่ยนระหว่างทำรายการ — ไม่ retry เอง ให้ HR ตรวจยอดใหม่แล้วยืนยันเอง
+            if (status === 409 && body?.code === 'SALARY_BASE_CHANGED') {
+                return {
+                    success: false,
+                    conflict: {
+                        code: body.code,
+                        message: body.message,
+                        data: body.data,
+                    },
+                    error: body.message || 'เงินเดือนของพนักงานถูกเปลี่ยนระหว่างทำรายการ',
+                    errors: {},
+                };
+            }
+
             let message = 'ไม่สามารถบันทึกการปรับฐานเงินเดือนได้';
             let errors = {};
-            if (err.response?.status === 422) {
+            if (status === 422) {
                 message = err.response.data?.message || 'ข้อมูลไม่ถูกต้อง';
                 errors = err.response.data?.errors || {};
             } else if (err.response) {
