@@ -9,8 +9,11 @@
 # จับแบบ "ทั้งบรรทัด" (anchored) ไม่ใช่ค้นคำในประโยค จึงยังเขียนข้อความ commit
 # ที่พูดถึงเรื่องนี้ได้ เช่น "...the tool's own signature line..."
 #
-# เปิดใช้:
-#   git config core.hooksPath .githooks      (รันครั้งเดียวต่อ 1 clone)
+# เปิดใช้ (รันครั้งเดียวต่อ 1 clone):
+#   git config core.hooksPath "$(git rev-parse --show-toplevel)/.githooks"
+#
+# ต้องเป็น absolute path — ถ้าใส่เป็น ".githooks" เฉย ๆ ฮุกจะหาไม่เจอเมื่อ
+# commit จากโฟลเดอร์ย่อย (เช่น backend/) แล้ว git จะข้ามฮุกไปเงียบ ๆ
 #
 # ข้ามการตรวจเมื่อจำเป็นจริง ๆ:
 #   git commit --no-verify
