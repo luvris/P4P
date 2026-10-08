@@ -3,6 +3,7 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\BudgetFrameworkController;
 use App\Http\Controllers\Api\ImportController;
 use App\Http\Controllers\Api\ImportTemplateController;
 use App\Http\Controllers\Api\EmployeeController;
@@ -130,6 +131,26 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware('role:admin,hr,finance')->prefix('finance')->group(function () {
         Route::get('/travel-expense-claims/summary', [TravelExpenseClaimController::class, 'summary']);
     });
+    // ========================================
+    // Finance — กรอบวงเงิน P4P (role: admin, finance)
+    // ========================================
+    // คำนวณ/บันทึก/ส่งออกเอกสารกรอบวงเงิน P4P จากข้อมูลที่มีอยู่แล้ว
+    // route คงที่ต้องประกาศก่อน /{framework}/export
+    Route::middleware('role:admin,finance')->prefix('finance/budget-frameworks')->group(function () {
+        Route::get('/options', [BudgetFrameworkController::class, 'options']);
+        Route::get('/preview', [BudgetFrameworkController::class, 'preview']);
+        Route::get('/export',  [BudgetFrameworkController::class, 'export']);
+
+        // การจับคู่ ตำแหน่งในไฟล์ → กลุ่มวิชาชีพ (แก้ไขได้)
+        Route::get('/position-groups', [BudgetFrameworkController::class, 'positionGroups']);
+        Route::put('/position-groups', [BudgetFrameworkController::class, 'updatePositionGroups']);
+
+        Route::get('/',  [BudgetFrameworkController::class, 'index']);
+        Route::post('/', [BudgetFrameworkController::class, 'store']);
+
+        Route::get('/{framework}/export', [BudgetFrameworkController::class, 'exportSaved']);
+    });
+
     // ========================================
     // Finance Routes (role: admin, finance)
     // ========================================
