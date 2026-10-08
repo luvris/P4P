@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use App\Support\ThaiFiscalYear;
 
 class Employee extends Model
 {
@@ -33,32 +34,21 @@ class Employee extends Model
         'note',
         'created_by',
         'updated_by',
-        // New HR fields
-        'hid',
-        'sex',
-        'blood_type',
-        'birth_date',
-        'tel',
-        'mobile',
-        'address1',
-        'address2',
-        'english_prefix',
-        'english_first_name',
-        'english_last_name',
-        'leaves_by',
-        'finger',
-        'email',
-        'line_token',
     ];
 
     protected $casts = [
         'salary' => 'decimal:2',
         'latest_salary' => 'decimal:2',
         'latest_period_month' => 'integer',
-        'birth_date' => 'date',
     ];
 
-    protected $appends = ['full_name', 'bank_account_number'];
+    protected $appends = [
+        'full_name',
+        'bank_account_number',
+        // เงินเดือนจากไฟล์งวดล่าสุด — หน้ารายชื่อ/แผงแก้ไข ใช้ค่าที่แนบมากับแถวโดยตรง
+        'latest_payroll_income',
+        'income_period_label',
+    ];
 
     // ========== Relationships ==========
 
@@ -127,12 +117,20 @@ class Employee extends Model
     }
 
     /**
-     * ข้อมูล payroll ล่าสุด (สำหรับดึงเลขบัญชี)
+     * ข้อมูล payroll ล่าสุด"ตามงวด" (ไม่ใช่ตาม id ที่นำเข้าล่าสุด)
+     *
+     * ไฟล์เงินเดือนรูปแบบใหม่มีหลายงวดในไฟล์เดียว และ "ปีงบประมาณ" เริ่มที่เดือน 10
+     * (ต.ค. → ก.ย.) จึงเรียงตามปี/เดือน ของงวดจริง (period_year, period_month)
+     * ไม่ใช่ fiscal_year + period_month ซึ่งจะทำให้ ธ.ค. 2568 (งวดแรกของปีงบ 2569)
+     * กลายเป็นงวดล่าสุดของปีงบ 2569 แทน พ.ค. 2569
+     *
      * ใช้ orderBy แทน latestOfMany เพื่อหลีกเลี่ยง ambiguous column
      */
     public function latestPayroll()
     {
         return $this->hasOne(Payroll::class, 'citizen_id', 'citizen_id')
+            ->orderByDesc('payrolls.period_year')
+            ->orderByDesc('payrolls.period_month')
             ->orderByDesc('payrolls.id')
             ->limit(1);
     }
@@ -156,6 +154,33 @@ class Employee extends Model
     {
         $prefix = $this->prefix?->name ?? '';
         return trim("{$prefix}{$this->first_name} {$this->last_name}");
+    }
+
+    /**
+     * "เงินเดือน" ตามที่ไฟล์เงินเดือนกำหนด = ยอดรวมรายรับทั้งหมด รายบุคคล (total_income)
+     * ของงวดล่าสุด — ไม่ใช่คอลัมน์ "เงินเดือน" (salary) ในไฟล์
+     *
+     * คืน null เมื่อยังไม่มีข้อมูลจากไฟล์ เพื่อให้ UI แสดง "ยังไม่มีข้อมูล" ได้ตรง ๆ
+     */
+    public function getLatestPayrollIncomeAttribute(): ?float
+    {
+        $value = $this->latestPayroll?->total_income;
+
+        return $value === null ? null : (float) $value;
+    }
+
+    /** ป้ายงวดของเงินเดือนจากไฟล์ เช่น "พฤษภาคม 2569" (null ถ้าไม่รู้งวด) */
+    public function getIncomePeriodLabelAttribute(): ?string
+    {
+        $payroll = $this->latestPayroll;
+
+        if (! $payroll || ! $payroll->period_month) {
+            return null;
+        }
+
+        $label = ThaiFiscalYear::monthLabel((int) $payroll->period_month);
+
+        return trim($label . ' ' . ($payroll->period_year ?? ''));
     }
 
     /**

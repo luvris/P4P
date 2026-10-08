@@ -46,7 +46,8 @@ class EmployeeController extends Controller
             'group:id,name',
             'work:id,name',
             'status:id,name,color',
-            'latestPayroll:id,citizen_id,bank_account', // เพิ่ม relationship เลขที่บัญชี
+            // เพิ่ม relationship เลขที่บัญชี + เงินเดือนจากไฟล์ (total_income ของงวดล่าสุด)
+            'latestPayroll:id,citizen_id,fiscal_year,period_month,period_year,total_income,bank_account',
         ]);
 
         // Search
@@ -260,10 +261,13 @@ class EmployeeController extends Controller
             'first_name'    => $employee->first_name,
             'last_name'     => $employee->last_name,
             'position_name' => $employee->position?->name,
-            // salary = ฐานที่ปรับแล้ว, latest_salary = ค่าจากไฟล์เงินเดือนล่าสุด
-            // ฝั่ง UI ใช้ salary ?? latest_salary เป็น "เงินเดือนปัจจุบัน"
-            'salary'        => $employee->salary,
-            'latest_salary' => $employee->latest_salary,
+            // salary = ฐานที่ปรับแล้วในทะเบียน, latest_payroll_income = ยอดรวมรายรับจากไฟล์งวดล่าสุด
+            // ฝั่ง UI ใช้ salary ?? latest_payroll_income เป็น "เงินเดือนปัจจุบัน"
+            'salary'              => $employee->salary,
+            'latest_payroll_income' => $employee->latest_payroll_income,
+            'income_period_label'   => $employee->income_period_label,
+            // คงไว้เป็นข้อมูลอ้างอิง (คอลัมน์ "เงินเดือน" ในไฟล์) — ไม่ใช้แสดงเป็นเงินเดือนปัจจุบันแล้ว
+            'latest_salary'       => $employee->latest_salary,
             'near'          => $near,
             'distance'      => $distance,
         ];
