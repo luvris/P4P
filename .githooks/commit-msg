@@ -29,10 +29,15 @@ if [ -z "$message_file" ] || [ ! -f "$message_file" ]; then
 fi
 
 # บรรทัด footer ที่ต้องปฏิเสธ (เทียบทั้งบรรทัด, ไม่สนตัวพิมพ์เล็ก/ใหญ่)
-#   1) "🤖 Generated with Codebuff"  (อนุญาตอักขระนำหน้าได้ เช่น emoji)
+#   1) "🤖 Generated with Codebuff"
 #   2) "Co-Authored-By: Codebuff <noreply@codebuff.com>"
 #   3) ที่อยู่อีเมลของ Codebuff ที่อยู่บรรทัดเดี่ยว ๆ
-footer_patterns='^[^[:alnum:]]*generated with codebuff[[:space:]]*$'
+#
+# !! ห้ามเขียนข้อ 1 เป็น '^[^[:alnum:]]*generated with codebuff$' !!
+# แบบนั้นต้องให้ character class "กิน" ไบต์ของ emoji ซึ่งผลขึ้นกับ locale:
+# ทดสอบแล้วว่าในสภาพแวดล้อมที่ git เรียกฮุก grep หาไม่เจอ (commit ที่มี 🤖 หลุด)
+# ทั้งที่รันมือจากเชลล์หาเจอ จึงจับ "ตัวคั่นก่อนคำ" แทน ซึ่งเป็นช่องว่าง ASCII เสมอ
+footer_patterns='(^|[^[:alnum:]])generated with codebuff[[:space:]]*$'
 footer_patterns="$footer_patterns"'|^[[:space:]]*co-authored-by:.*codebuff'
 footer_patterns="$footer_patterns"'|^[[:space:]]*<?noreply@codebuff\.com>?[[:space:]]*$'
 
