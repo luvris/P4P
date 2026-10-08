@@ -27,12 +27,15 @@ const Highlight = ({ text, term }) => {
 };
 
 /**
- * เงินเดือนปัจจุบันของพนักงาน = salary (ฐานที่ปรับแล้ว) ?? latest_salary (จากไฟล์ล่าสุด)
+ * เงินเดือนปัจจุบันของพนักงาน = salary (ฐานที่ปรับแล้ว) ?? latest_payroll_income
+ * (ยอดรวมรายรับทั้งหมดรายบุคคลจากไฟล์งวดล่าสุด)
  * ใช้ null check ไม่ใช่ truthy check — ค่า 0 เป็นค่าจริงห้ามถูกข้าม
  */
 const currentSalaryOf = (emp) => {
     if (emp?.salary != null && emp?.salary !== '') return emp.salary;
-    if (emp?.latest_salary != null && emp?.latest_salary !== '') return emp.latest_salary;
+    if (emp?.latest_payroll_income != null && emp?.latest_payroll_income !== '') {
+        return emp.latest_payroll_income;
+    }
     return null;
 };
 

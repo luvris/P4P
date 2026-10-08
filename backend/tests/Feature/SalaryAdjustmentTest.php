@@ -4,6 +4,8 @@ namespace Tests\Feature;
 
 use App\Models\Employee;
 use App\Models\EmployeeStatus;
+use App\Models\Import;
+use App\Models\Payroll;
 use App\Models\SalaryAdjustment;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -14,11 +16,11 @@ use Tests\TestCase;
  * ปรับฐานเงินเดือน (POST /api/hr/salary-adjustments)
  *
  * Contract ที่ test คุม:
- * - ฐาน = employees.salary ?? employees.latest_salary (ค่า 0 เป็นค่าจริง ห้ามข้าม)
+ * - ฐาน = employees.salary ?? payrolls.total_income ของงวดล่าสุด (ค่า 0 เป็นค่าจริง ห้ามข้าม)
  * - expected_old_salary ใช้ตรวจฐานที่ HR เห็นเท่านั้น (old_salary จาก client ถูกละเลย)
  * - สร้างประวัติ + อัปเดต salary สำเร็จพร้อมกัน มิฉะนั้น rollback ทั้งคู่
  * - ฐานเปลี่ยนระหว่างทำรายการ → 409 SALARY_BASE_CHANGED ไม่มีการบันทึก
- * - ไม่แตะ employees.latest_salary เด็ดขาด
+ * - ไม่แตะ employees.latest_salary และไม่แตะ payrolls เด็ดขาด
  */
 class SalaryAdjustmentTest extends TestCase
 {
@@ -47,12 +49,15 @@ class SalaryAdjustmentTest extends TestCase
 
     /**
      * สร้างพนักงานทดสอบ — citizen_id ไม่ซ้ำกันทุกครั้ง
+     *
+     * $latestSalary คือค่าคอลัมน์ "เงินเดือน" ในไฟล์ และถูกใช้เป็นยอดรวมรายรับ
+     * (total_income) ของงวดล่าสุดใน payrolls ด้วย — คือค่าที่หน้าจอใช้เป็น "เงินเดือนปัจจุบัน"
      */
     private function makeEmployee(?float $salary, ?float $latestSalary, array $overrides = []): Employee
     {
         $this->employeeSeq++;
 
-        return Employee::create(array_merge([
+        $employee = Employee::create(array_merge([
             'citizen_id'    => str_pad((string) (9000000000000 + $this->employeeSeq), 13, '0', STR_PAD_LEFT),
             'employee_id'   => 'P' . str_pad((string) $this->employeeSeq, 4, '0', STR_PAD_LEFT),
             'first_name'    => 'สมชาย',
@@ -61,6 +66,40 @@ class SalaryAdjustmentTest extends TestCase
             'salary'        => $salary,
             'latest_salary' => $latestSalary,
         ], $overrides));
+
+        if ($latestSalary !== null) {
+            $this->makePayroll($employee, $latestSalary);
+        }
+
+        return $employee;
+    }
+
+    /** สร้างแถว payrolls หนึ่งงวด ให้มียอดรวมรายรับ (total_income) ที่กำหนด */
+    private function makePayroll(Employee $employee, float $totalIncome): Payroll
+    {
+        $import = Import::create([
+            'file_name'    => "payroll-{$employee->id}.xlsx",
+            'file_path'    => 'imports/payroll.xlsx',
+            'file_type'    => 'xlsx',
+            'uploaded_by'  => $this->hr->id,
+            'status'       => 'completed',
+            'import_type'  => 'payroll',
+            'fiscal_year'  => 2569,
+            'period_month' => 9,
+            'period_year'  => 2569,
+        ]);
+
+        return Payroll::create([
+            'import_id'    => $import->id,
+            'citizen_id'   => $employee->citizen_id,
+            'first_name'   => $employee->first_name,
+            'last_name'    => $employee->last_name,
+            'fiscal_year'  => 2569,
+            'period_month' => 9,
+            'period_year'  => 2569,
+            'total_income' => $totalIncome,
+            'salary'       => $totalIncome,
+        ]);
     }
 
     private function adjust(array $overrides = [])
@@ -78,7 +117,7 @@ class SalaryAdjustmentTest extends TestCase
     // Contract หลัก
     // ============================================================
 
-    public function test_first_adjustment_uses_latest_salary_as_base_when_salary_is_null(): void
+    public function test_first_adjustment_uses_payroll_total_income_as_base_when_salary_is_null(): void
     {
         $employee = $this->makeEmployee(null, 15000);
 
@@ -160,7 +199,7 @@ class SalaryAdjustmentTest extends TestCase
         $this->assertSame(1000.0, (float) $log->increase_amount);
     }
 
-    public function test_adjustment_works_when_latest_salary_is_null_but_salary_exists(): void
+    public function test_adjustment_works_when_payroll_is_missing_but_salary_exists(): void
     {
         $employee = $this->makeEmployee(20000, null);
 
@@ -179,7 +218,7 @@ class SalaryAdjustmentTest extends TestCase
         $this->assertNull($employee->latest_salary);
     }
 
-    public function test_both_salary_and_latest_salary_null_returns_422_and_writes_nothing(): void
+    public function test_both_salary_and_payroll_null_returns_422_and_writes_nothing(): void
     {
         $employee = $this->makeEmployee(null, null);
 
@@ -197,7 +236,7 @@ class SalaryAdjustmentTest extends TestCase
         $this->assertNull($employee->salary);
     }
 
-    public function test_zero_salary_is_a_real_base_and_does_not_fall_back_to_latest_salary(): void
+    public function test_zero_salary_is_a_real_base_and_does_not_fall_back_to_payroll_income(): void
     {
         $employee = $this->makeEmployee(0, 15000);
 
@@ -339,7 +378,7 @@ class SalaryAdjustmentTest extends TestCase
 
         $this->assertSame(16000.0, (float) $response->json('data.base'));
         $this->assertSame(16000.0, (float) $response->json('data.salary'));
-        $this->assertSame(15000.0, (float) $response->json('data.latest_salary'));
+        $this->assertSame(15000.0, (float) $response->json('data.latest_payroll_income'));
 
         $this->assertSame(0, SalaryAdjustment::count());
         $employee->refresh();
@@ -374,12 +413,12 @@ class SalaryAdjustmentTest extends TestCase
         $this->assertSame(15000.0, (float) $employee->latest_salary);
     }
 
-    public function test_conflict_reports_latest_salary_as_base_source_when_salary_is_null(): void
+    public function test_conflict_reports_payroll_income_as_base_source_when_salary_is_null(): void
     {
         $employee = $this->makeEmployee(null, 15000);
 
-        // ไฟล์เงินเดือนใหม่ถูก import ทับ latest_salary → ฐานที่ HR เห็น (15,000) ไม่ตรงแล้ว
-        $employee->update(['latest_salary' => 16000]);
+        // นำเข้าไฟล์งวดใหม่ทับยอดรวมรายรับ → ฐานที่ HR เห็น (15,000) ไม่ตรงแล้ว
+        Payroll::where('citizen_id', $employee->citizen_id)->update(['total_income' => 16000]);
 
         $response = $this->adjust([
             'employee_id'         => $employee->id,
@@ -389,10 +428,10 @@ class SalaryAdjustmentTest extends TestCase
 
         $response->assertStatus(409)
             ->assertJsonPath('code', 'SALARY_BASE_CHANGED')
-            ->assertJsonPath('data.base_source', 'latest_salary');
+            ->assertJsonPath('data.base_source', 'payroll_total_income');
 
         $this->assertSame(16000.0, (float) $response->json('data.base'));
-        $this->assertSame(16000.0, (float) $response->json('data.latest_salary'));
+        $this->assertSame(16000.0, (float) $response->json('data.latest_payroll_income'));
         $this->assertNull($response->json('data.salary'));
 
         $this->assertSame(0, SalaryAdjustment::count());
@@ -453,7 +492,7 @@ class SalaryAdjustmentTest extends TestCase
     // ข้อมูลแสดงผล: suggest + payload หน้าพนักงาน
     // ============================================================
 
-    public function test_suggest_returns_both_salary_and_latest_salary_and_new_salary_after_adjustment(): void
+    public function test_suggest_returns_salary_and_payroll_income_and_new_salary_after_adjustment(): void
     {
         $employee = $this->makeEmployee(null, 15000);
 
@@ -461,9 +500,10 @@ class SalaryAdjustmentTest extends TestCase
             ->getJson('/api/hr/employees/suggest?q=' . $employee->citizen_id)
             ->assertOk()
             ->assertJsonCount(1, 'data')
-            ->assertJsonPath('data.0.latest_salary', '15000.00');
+            ->assertJsonPath('data.0.latest_payroll_income', 15000)
+            ->assertJsonPath('data.0.income_period_label', 'กันยายน 2569');
 
-        $this->assertNull($employee->salary); // salary ยัง null → UI ใช้ latest_salary เป็นเงินเดือนปัจจุบัน
+        $this->assertNull($employee->salary); // salary ยัง null → UI ใช้ latest_payroll_income เป็นเงินเดือนปัจจุบัน
 
         $this->adjust([
             'employee_id'         => $employee->id,
@@ -471,19 +511,19 @@ class SalaryAdjustmentTest extends TestCase
             'new_salary'          => 16000,
         ])->assertStatus(201);
 
-        // หลังปรับ suggest ต้องคืน salary ใหม่
+        // หลังปรับ suggest ต้องคืน salary ใหม่ (และยังคืนยอดจากไฟล์ไว้เทียบ)
         $this->actingAs($this->hr)
             ->getJson('/api/hr/employees/suggest?q=' . $employee->citizen_id)
             ->assertOk()
             ->assertJsonPath('data.0.salary', '16000.00')
-            ->assertJsonPath('data.0.latest_salary', '15000.00');
+            ->assertJsonPath('data.0.latest_payroll_income', 15000);
 
-        // payload หน้ารายชื่อ/รายบุคคลคืนทั้งค่า ให้แสดง salary ?? latest_salary ได้
+        // payload หน้ารายชื่อคืนทั้งค่า ให้แสดง salary ?? latest_payroll_income ได้
         $this->actingAs($this->hr)
             ->getJson('/api/hr/employees?search=' . $employee->citizen_id)
             ->assertOk()
             ->assertJsonPath('data.0.salary', '16000.00')
-            ->assertJsonPath('data.0.latest_salary', '15000.00');
+            ->assertJsonPath('data.0.latest_payroll.total_income', '15000.00');
     }
 
     public function test_missing_employee_inside_transaction_answers_not_found_without_writing(): void

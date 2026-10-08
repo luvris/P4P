@@ -23,11 +23,11 @@ const INITIAL_FORM = {
 // ที่มาของฐานเงินเดือนที่แสดงให้ HR เห็น
 const BASE_SOURCE_LABELS = {
     salary: 'เงินเดือนปัจจุบันในทะเบียน',
-    latest_salary: 'ฐานเริ่มต้นจากไฟล์เงินเดือนล่าสุด',
+    payroll_total_income: 'ฐานเริ่มต้นจากยอดรวมรายรับล่าสุดในไฟล์เงินเดือน',
 };
 
 /**
- * เงินเดือนก่อนปรับ = salary ?? latest_salary (ค่า 0 เป็นค่าจริง — ห้ามใช้ truthy check)
+ * เงินเดือนก่อนปรับ = salary ?? latest_payroll_income (ค่า 0 เป็นค่าจริง — ห้ามใช้ truthy check)
  * คืนทั้งค่าที่แสดงและแหล่งที่มา
  */
 const baseFromEmployee = (emp) => {
@@ -35,8 +35,8 @@ const baseFromEmployee = (emp) => {
     if (emp.salary != null && emp.salary !== '') {
         return { value: String(emp.salary), source: 'salary' };
     }
-    if (emp.latest_salary != null && emp.latest_salary !== '') {
-        return { value: String(emp.latest_salary), source: 'latest_salary' };
+    if (emp.latest_payroll_income != null && emp.latest_payroll_income !== '') {
+        return { value: String(emp.latest_payroll_income), source: 'payroll_total_income' };
     }
     return { value: '', source: null };
 };
@@ -204,7 +204,12 @@ const AddAdjustmentDrawer = ({ open, onClose, onSubmit }) => {
             setBaseSource(data.base_source ?? null);
             setSelectedEmployee((prev) =>
                 prev
-                    ? { ...prev, salary: data.salary ?? null, latest_salary: data.latest_salary ?? null }
+                    ? {
+                        ...prev,
+                        salary: data.salary ?? null,
+                        latest_payroll_income:
+                            data.latest_payroll_income ?? prev.latest_payroll_income ?? null,
+                    }
                     : prev,
             );
             setGlobalError(

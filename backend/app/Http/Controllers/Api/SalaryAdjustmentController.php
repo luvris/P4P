@@ -78,10 +78,12 @@ class SalaryAdjustmentController extends Controller
     // บันทึกการปรับฐานเงินเดือน + อัปเดต salary บนตาราง employees
     //
     // Contract:
-    // - ฐานเงินเดือนปัจจุบัน = employees.salary ?? employees.latest_salary (ค่า 0 ถือเป็นค่าจริง)
+    // - ฐานเงินเดือนปัจจุบัน = employees.salary ?? payrolls.total_income ของงวดล่าสุด
+    //   (ค่า 0 ถือเป็นค่าจริง) — ใช้ยอดรวมรายรับจากไฟล์ตามที่ฝ่ายการเงินกำหนด
+    //   ไม่ใช้คอลัมน์ "เงินเดือน" (latest_salary) เป็นฐานอีกต่อไป
     // - expected_old_salary ใช้ตรวจว่าฐานที่ HR เห็นยังตรงกับ DB เท่านั้น (ไม่ได้ใช้สร้างประวัติ)
     // - สร้างประวัติ + อัปเดต salary ต้องสำเร็จพร้อมกัน มิฉะนั้น rollback ทั้งคู่
-    // - ไม่แตะ employees.latest_salary (คือเงินเดือนจากรายการไฟล์ล่าสุด)
+    // - ไม่แตะ latest_salary / payrolls
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -109,10 +111,10 @@ class SalaryAdjustmentController extends Controller
 
             // cast decimal:2 ได้ string|null — ห้ามใช้ truthy check เพราะค่า 0 เป็นค่าจริง
             $salary = $employee->salary;
-            $latest = $employee->latest_salary;
+            $payrollIncome = $employee->latest_payroll_income;
 
-            $baseValue = $salary ?? $latest;
-            $baseSource = $salary !== null ? 'salary' : 'latest_salary';
+            $baseValue = $salary ?? $payrollIncome;
+            $baseSource = $salary !== null ? 'salary' : 'payroll_total_income';
 
             if ($baseValue === null) {
                 return ['error' => response()->json(['message' => 'ไม่มีข้อมูลฐานเงินเดือน'], 422)];
@@ -132,7 +134,7 @@ class SalaryAdjustmentController extends Controller
                         'base' => $base,
                         'base_source' => $baseSource,
                         'salary' => $salary !== null ? (float) $salary : null,
-                        'latest_salary' => $latest !== null ? (float) $latest : null,
+                        'latest_payroll_income' => $payrollIncome,
                     ],
                 ], 409)];
             }
@@ -171,7 +173,7 @@ class SalaryAdjustmentController extends Controller
             ]);
 
             // อัปเดตฐานเงินเดือนให้พนักงาน — ใน transaction เดียวกับการสร้างประวัติ
-            // ไม่แตะ latest_salary
+            // ไม่แตะ latest_salary และไม่แตะ payrolls
             $employee->update([
                 'salary' => $newSalary,
                 'updated_by' => $userId,

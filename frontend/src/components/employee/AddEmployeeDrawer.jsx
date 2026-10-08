@@ -31,11 +31,11 @@ const buildFormFromEmployee = (emp) => ({
     last_name: emp?.last_name ?? '',
     citizen_id: emp?.citizen_id ?? '',
     position_number: emp?.position_number ?? '',
-    // salary (ฐานที่ปรับแล้ว) มาก่อน — ว่างค่อยดึงจากไฟล์เงินเดือนล่าสุด
+    // salary (ฐานที่ปรับแล้ว) มาก่อน — ว่างค่อยเติมจากยอดรวมรายรับในไฟล์งวดล่าสุด
     salary: emp?.salary != null && emp?.salary !== ''
         ? String(emp.salary)
-        : emp?.latest_salary != null && emp?.latest_salary !== ''
-            ? String(emp.latest_salary)
+        : emp?.latest_payroll_income != null && emp?.latest_payroll_income !== ''
+            ? String(emp.latest_payroll_income)
             : '',
     employee_type_id: emp?.employee_type_id != null ? String(emp.employee_type_id) : '',
     position_id: emp?.position_id != null ? String(emp.position_id) : '',
@@ -72,17 +72,15 @@ Field.displayName = 'Field';
 const AddEmployeeDrawer = ({ open, onClose, lookups = {}, onSubmit, employee = null, readOnly = false }) => {
     const isEditing = Boolean(employee);
 
-    // ที่มาของค่าในช่องเงินเดือน — ค่าจากฐานที่ปรับแล้วมาก่อน ไม่มีค่อยใช้ค่าจากไฟล์
+    // เงินเดือนจากไฟล์ = ยอดรวมรายรับทั้งหมด (total_income) ของงวดล่าสุด — แสดงอย่างเดียว ไม่แก้
+    const fileIncome = employee?.latest_payroll_income;
+    const hasFileIncome = fileIncome != null && fileIncome !== '';
+    const latestPeriod = employee?.income_period_label ? ` งวด ${employee.income_period_label}` : '';
+
+    // ฐานเงินเดือนในทะเบียน (employees.salary) — ค่าที่ HR ปรับเอง
     const hasOwnSalary = employee?.salary != null && employee?.salary !== '';
-    const salaryFromLatest = !hasOwnSalary && employee?.latest_salary != null && employee?.latest_salary !== '';
     const latestDiffers =
-        hasOwnSalary &&
-        employee?.latest_salary != null &&
-        employee?.latest_salary !== '' &&
-        Number(employee.salary) !== Number(employee.latest_salary);
-    const latestPeriod = employee?.latest_period_year
-        ? ` งวด ${employee.latest_period_month ?? '-'}/${employee.latest_period_year}`
-        : '';
+        hasOwnSalary && hasFileIncome && Number(employee.salary) !== Number(fileIncome);
 
     const [form, setForm] = useState(INITIAL_FORM);
     const [errors, setErrors] = useState({});
@@ -301,26 +299,35 @@ const AddEmployeeDrawer = ({ open, onClose, lookups = {}, onSubmit, employee = n
                         />
                     </Field>
 
-                    {/* เงินเดือน */}
-                    <Field label="เงินเดือน" name="salary" error={errors.salary}>
+                    {/* เงินเดือนจากไฟล์ (อ่านอย่างเดียว) — ยอดรวมรายรับทั้งหมดรายบุคคลของงวดล่าสุด */}
+                    <Field label="เงินเดือนจากไฟล์ (ยอดรวมรายรับล่าสุด)">
+                        <input
+                            type="text"
+                            readOnly
+                            disabled
+                            value={
+                                hasFileIncome
+                                    ? `${formatCurrency(fileIncome)} บาท${latestPeriod}`
+                                    : 'ยังไม่มีข้อมูลจากไฟล์เงินเดือน'
+                            }
+                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-gray-100 text-gray-700 cursor-default"
+                        />
+                    </Field>
+
+                    {/* ฐานเงินเดือนในทะเบียน — ค่าที่ HR ตั้ง/ปรับเอง */}
+                    <Field label="ฐานเงินเดือนในทะเบียน" name="salary" error={errors.salary}>
                         <input
                             type="number"
                             value={form.salary}
                             onChange={(e) => setField('salary', e.target.value)}
-                            placeholder="ระบุจำนวนเงินเดือน"
+                            placeholder="ระบุฐานเงินเดือนในทะเบียน"
                             min="0"
                             step="0.01"
                             className={inputCls('salary')}
                         />
-                        {/* ที่มาของค่าในช่อง — ไม่มีฐานเงินเดือนก็เติมจากไฟล์เงินเดือนล่าสุด */}
-                        {salaryFromLatest && (
-                            <p className="mt-1 text-xs text-amber-700">
-                                เติมจากไฟล์เงินเดือน{latestPeriod}
-                            </p>
-                        )}
                         {latestDiffers && (
                             <p className="mt-1 text-xs text-amber-700">
-                                ล่าสุดจากไฟล์เงินเดือน: {formatCurrency(employee.latest_salary)} บาท{latestPeriod}
+                                เงินเดือนจากไฟล์{latestPeriod}: {formatCurrency(fileIncome)} บาท
                             </p>
                         )}
                     </Field>
