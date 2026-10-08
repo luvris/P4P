@@ -6,6 +6,7 @@ import EmployeePage from './pages/Employee';
 import ReserveFundPage from './pages/ReserveFund';
 import SalaryAdjustmentPage from './pages/SalaryAdjustment';
 
+import BudgetFrameworkPage from './pages/BudgetFramework';
 import ClaimListPage from './pages/TravelExpenseClaim/ClaimListPage';
 import ClaimSummaryPage from './pages/TravelExpenseClaim/ClaimSummaryPage';
 import ProfilePage from './pages/ProfilePage';
@@ -88,6 +89,18 @@ function App() {
         {/* ลิงก์เดิม — คงไว้ไม่ให้ URL ที่แชร์กันไว้พัง */}
         <Route path="/hr/import" element={<Navigate to="/import" replace />} />
         <Route path="/finance/import" element={<Navigate to="/import" replace />} />
+
+        {/* Finance — กรอบวงเงิน P4P (คำนวณ/บันทึก/ส่งออกเอกสาร) */}
+        <Route
+          path="/finance/budget-frameworks"
+          element={
+            <ProtectedRoute allowedRoles={['admin', 'finance']}>
+              <DashboardLayout title="กรอบวงเงิน P4P">
+                <BudgetFrameworkPage />
+              </DashboardLayout>
+            </ProtectedRoute>
+          }
+        />
 
         {/* Finance — จัดทำใบเบิกค่าใช้จ่ายเดินทางไปราชการ */}
         <Route

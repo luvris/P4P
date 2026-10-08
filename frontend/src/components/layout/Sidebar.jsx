@@ -45,6 +45,7 @@ const Sidebar = ({ isOpen = true, onClose }) => {
             roles: ['admin', 'finance'],
             children: [
                 { name: 'จัดทำใบเบิกค่าใช้จ่าย', path: '/finance/travel-expense-claims' },
+                { name: 'กรอบวงเงิน P4P', path: '/finance/budget-frameworks' },
             ],
         },
     ];
