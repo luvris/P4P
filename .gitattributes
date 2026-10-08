@@ -1,0 +1,4 @@
+# ฮุกของ git ต้องเป็น LF เสมอ
+# (core.autocrlf=true ของ Windows จะแปลงเป็น CRLF แล้วฝั่ง Unix รันไม่ได้:
+#  "bad interpreter: /bin/sh^M")
+.githooks/* text eol=lf

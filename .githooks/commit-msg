@@ -1,0 +1,51 @@
+#!/bin/sh
+#
+# commit-msg — กัน footer ของเครื่องมือเขียนโค้ด (Codebuff) ไม่ให้ติดไปกับ commit
+#
+# เหตุผล: ประวัติของ repo นี้เคยมีบรรทัดโฆษณา/ผู้ร่วมเขียนของ Codebuff ปนอยู่หลาย commit
+# ซึ่งไม่เกี่ยวกับเนื้อหางานและทำให้ log อ่านยากขึ้น ฮุกนี้จึงปฏิเสธข้อความ commit
+# ที่ยังมี "บรรทัด footer" ดังกล่าว
+#
+# จับแบบ "ทั้งบรรทัด" (anchored) ไม่ใช่ค้นคำในประโยค จึงยังเขียนข้อความ commit
+# ที่พูดถึงเรื่องนี้ได้ เช่น "...the tool's own signature line..."
+#
+# เปิดใช้:
+#   git config core.hooksPath .githooks      (รันครั้งเดียวต่อ 1 clone)
+#
+# ข้ามการตรวจเมื่อจำเป็นจริง ๆ:
+#   git commit --no-verify
+#
+# หมายเหตุ: git ส่ง path ของไฟล์ข้อความ commit มาเป็นอาร์กิวเมนต์ตัวแรก
+#           บรรทัดที่ขึ้นต้นด้วย "#" (comment ของ git) ถูกตัดออกก่อนตรวจ
+
+message_file="$1"
+
+# ไม่มีไฟล์ข้อความ (บางกรณีเช่น rebase/am) → ปล่อยผ่าน
+if [ -z "$message_file" ] || [ ! -f "$message_file" ]; then
+    exit 0
+fi
+
+# บรรทัด footer ที่ต้องปฏิเสธ (เทียบทั้งบรรทัด, ไม่สนตัวพิมพ์เล็ก/ใหญ่)
+#   1) "🤖 Generated with Codebuff"  (อนุญาตอักขระนำหน้าได้ เช่น emoji)
+#   2) "Co-Authored-By: Codebuff <noreply@codebuff.com>"
+#   3) ที่อยู่อีเมลของ Codebuff ที่อยู่บรรทัดเดี่ยว ๆ
+footer_patterns='^[^[:alnum:]]*generated with codebuff[[:space:]]*$'
+footer_patterns="$footer_patterns"'|^[[:space:]]*co-authored-by:.*codebuff'
+footer_patterns="$footer_patterns"'|^[[:space:]]*<?noreply@codebuff\.com>?[[:space:]]*$'
+
+violations=$(
+    sed -e 's/^#.*$//' "$message_file" \
+        | grep -inE "$footer_patterns"
+)
+
+if [ -n "$violations" ]; then
+    printf '\n'
+    printf '\xe2\x9c\x96 ปฏิเสธการ commit: ข้อความยังมี footer ของ Codebuff\n\n'
+    printf '%s\n' "$violations" | sed -e 's/^/    /'
+    printf '\n'
+    printf 'ลบบรรทัดเหล่านี้ออกจากข้อความ commit แล้ว commit ใหม่\n'
+    printf 'ถ้าจำเป็นต้อง commit จริง ๆ ใช้: git commit --no-verify\n\n'
+    exit 1
+fi
+
+exit 0
